@@ -66,12 +66,12 @@ export default function Page() {
             Se connecter
           </Button>
         </form>
-        <div className="mt-4 text-sm text-muted-foreground">
+        {/* <div className="mt-4 text-sm text-muted-foreground">
           <span>Pas de compte ? </span>
           <Link href="/auth/register" className="text-primary underline">
             Créer un compte
           </Link>
-        </div>
+        </div> */}
         <div className="mt-2 text-sm">
           <Link href="/auth/forgot" className="text-primary underline">
             Mot de passe oublié ?
