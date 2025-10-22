@@ -1,7 +1,8 @@
 "use client";
 
-import { Menu, LogOut, User, Shield, Calendar } from "lucide-react";
+import { Menu, LogOut, User, Calendar } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useAuth } from "@/hooks/useAuth";
@@ -75,18 +76,18 @@ export default function Header({ onToggle }: { onToggle?: () => void }) {
                         <Menu className="h-4 w-4" />
                     </Button>
 
-                    <Link href="/" className="flex items-center gap-3 no-underline group">
-                        <div className="flex items-center justify-center w-8 h-8 bg-blue-600 rounded-lg group-hover:bg-blue-700 transition-colors">
-                            <Shield className="h-5 w-5 text-white" />
+                    <Link href="/" className="flex items-center gap-2 sm:gap-3 ">
+                        <div className="relative">
+                            <Image
+                                src="/images/logo.png"
+                                alt="OncoGuard Logo"
+                                width={180}
+                                height={64}
+                                className="h-12 sm:h-14 md:h-16 w-auto"
+                                priority
+                            />
                         </div>
-                        <div className="flex flex-col">
-                            <span className="font-bold text-gray-900 text-lg leading-5">
-                                OncoGuard
-                            </span>
-                            <span className="text-xs text-gray-500 font-medium">
-                                Tableau de bord médical
-                            </span>
-                        </div>
+                         
                     </Link>
                 </div>
 
@@ -103,7 +104,7 @@ export default function Header({ onToggle }: { onToggle?: () => void }) {
                                 </span>
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
-                                <Badge tone={userStatus.tone}  >
+                                <Badge tone={userStatus.tone}>
                                     {userStatus.label}
                                 </Badge>
                                 <div className="flex items-center gap-1 text-xs text-gray-500">
@@ -130,7 +131,7 @@ export default function Header({ onToggle }: { onToggle?: () => void }) {
                             <span className="text-sm font-medium text-gray-900">
                                 {greeting} !
                             </span>
-                            <Badge tone={userStatus.tone}  >
+                            <Badge tone={userStatus.tone}>
                                 {userStatus.label}
                             </Badge>
                         </div>

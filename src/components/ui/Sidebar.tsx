@@ -10,6 +10,7 @@ import {
   Shield,
   BookOpen,
   Tag,
+  Users,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -20,6 +21,7 @@ const appLinks = [
   { href: "/dashboard/files", label: "Fichiers", icon: FileArchive },
   { href: "/dashboard/inference", label: "Inférence", icon: Images },
   { href: "/dashboard/tagged", label: "Résultats annotées", icon: Tag },
+  { href: "/dashboard/users", label: "Utilisateurs", icon: Users },
   { href: "/dashboard/birads", label: "Guide BI-RADS", icon: BookOpen },
 ];
 

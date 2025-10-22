@@ -38,7 +38,7 @@ export default function IndexLayout({ children }: { children: React.ReactNode })
       <Header onToggle={() => setCollapsed((v) => !v)} />
       <div className="flex flex-1">
         <Sidebar collapsedExternal={collapsed} />
-        <main className="flex-1 p-4 md:ml-0 md:p-6">{children}</main>
+        <main className="flex-1 p-0 md:ml-0 md:p-0">{children}</main>
       </div>
       <Footer />  
     </div>

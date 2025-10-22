@@ -12,12 +12,16 @@ export function anonymize(
   const q = new URLSearchParams();
   if (opts?.run_inference) q.set("run_inference", "true");
   if (opts?.persist !== undefined) q.set("persist", String(opts.persist));
-  return apiClient.post<IngestResponse>(`/ingest/anonymize?${q.toString()}`, fd, {
-    headers: { "Content-Type": "multipart/form-data" },
-    onUploadProgress: (e) => {
-      if (!e.total) return;
-      const pct = Math.round((e.loaded * 100) / e.total);
-      onUploadProgress?.(pct);
-    },
-  }).then(r => r.data);
+  const qs = q.toString();
+  const url = `/ingest/anonymize${qs ? `?${qs}` : ""}`;
+  return apiClient
+    .post<IngestResponse>(url, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (e) => {
+        if (!e.total) return;
+        const pct = Math.round((e.loaded * 100) / e.total);
+        onUploadProgress?.(pct);
+      },
+    })
+    .then((r) => r.data);
 }
