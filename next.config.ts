@@ -2,6 +2,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["recharts"], 
   images: {
     // Prend en charge le port (mieux que `domains`)
     remotePatterns: [
