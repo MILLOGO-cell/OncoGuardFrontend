@@ -8,7 +8,6 @@ import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Input from "@/components/ui/Input";
 import { useUsers } from "@/hooks/useUsers";
-import { useAuth } from "@/hooks/useAuth";
 import { useUserAdminStore } from "@/store/userAdminStore";
 import type { UserOut } from "@/types/auth";
 import type { UserUpdate, UserCreate } from "@/types/auth";
@@ -21,8 +20,8 @@ export default function UsersPage() {
   const [userToDelete, setUserToDelete] = useState<UserOut | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const { fetchUsers, saveUser, removeUser } = useUsers();
-  const { register } = useAuth();
+  // ✅ Utiliser createUser au lieu de register
+  const { fetchUsers, createUser, saveUser, removeUser } = useUsers();
   const { items: users, loading } = useUserAdminStore();
 
   const [formData, setFormData] = useState({
@@ -122,22 +121,36 @@ export default function UsersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isEditMode && selectedUser) {
-      const payload: UserUpdate = {
-        full_name: formData.full_name,
-        email: formData.email,
-      };
-      await saveUser(selectedUser.id, payload);
+    
+    try {
+      if (isEditMode && selectedUser) {
+        // ✅ Modifier un utilisateur existant
+        const payload: UserUpdate = {
+          full_name: formData.full_name,
+          email: formData.email,
+        };
+        await saveUser(selectedUser.id, payload);
+      } else {
+        // ✅ Créer un nouveau utilisateur (sans affecter le user connecté)
+        const payload: UserCreate = {
+          full_name: formData.full_name,
+          email: formData.email,
+          password: "", // Le backend génère automatiquement
+        };
+        await createUser(payload);
+      }
+      
+      // Rafraîchir la liste
       await fetchUsers();
-    } else {
-      const payload = { full_name: formData.full_name, email: formData.email } as unknown as UserCreate;
-      await register(payload);
-      await fetchUsers();
+      
+      // Fermer le modal
+      setIsModalOpen(false);
+      setIsEditMode(false);
+      setSelectedUser(null);
+      setFormData({ full_name: "", email: "" });
+    } catch (error) {
+      console.error("Erreur lors de la soumission:", error);
     }
-    setIsModalOpen(false);
-    setIsEditMode(false);
-    setSelectedUser(null);
-    setFormData({ full_name: "", email: "" });
   };
 
   const handleOpenModal = () => {
@@ -150,11 +163,16 @@ export default function UsersPage() {
   const confirmDelete = async () => {
     if (!userToDelete) return;
     setDeleting(true);
-    await removeUser(userToDelete.id);
-    await fetchUsers();
-    setDeleting(false);
-    setIsDeleteOpen(false);
-    setUserToDelete(null);
+    try {
+      await removeUser(userToDelete.id);
+      await fetchUsers();
+      setIsDeleteOpen(false);
+      setUserToDelete(null);
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const stats = {
@@ -214,7 +232,7 @@ export default function UsersPage() {
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         title={isEditMode ? "Modifier l'utilisateur" : "Ajouter un utilisateur"}
-        description={isEditMode ? "Modifiez les informations de l'utilisateur" : "Créez un nouveau compte utilisateur"}
+        description={isEditMode ? "Modifiez les informations de l'utilisateur" : "Créez un nouveau compte utilisateur. Un mot de passe sera généré automatiquement et envoyé par email."}
         size="md"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -236,6 +254,12 @@ export default function UsersPage() {
             required
             disabled={loading}
           />
+
+          {!isEditMode && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-sm text-blue-700">
+              ℹ️ Un mot de passe sera généré automatiquement et envoyé à l'utilisateur par email.
+            </div>
+          )}
 
           <div className="flex gap-2 justify-end pt-4">
             <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} disabled={loading}>

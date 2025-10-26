@@ -135,12 +135,12 @@ export default function Page() {
           <div className="text-sm text-muted-foreground">Confiance moyenne</div>
           <div className="text-2xl font-semibold">{percentFormat(data?.avg_confidence)}</div>
         </div>
-        <div className="rounded-xl border p-4">
+        {/* <div className="rounded-xl border p-4">
           <div className="text-sm text-muted-foreground">Patients distincts</div>
           <div className="text-2xl font-semibold">
             {data?.distinct_patients == null ? "—" : numberFormat(data.distinct_patients)}
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* Charts row 1 */}

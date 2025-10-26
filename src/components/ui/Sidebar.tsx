@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   FileArchive,
-  FlaskConical,
   Images,
   Shield,
   BookOpen,
@@ -17,10 +16,9 @@ import clsx from "clsx";
 const appLinks = [
   { href: "/dashboard", label: "Aperçu", icon: Shield },
   { href: "/dashboard/stats", label: "Statistiques", icon: BarChart3 },
-  { href: "/dashboard/ingest", label: "Anonymiser", icon: FlaskConical },
   { href: "/dashboard/files", label: "Fichiers", icon: FileArchive },
   { href: "/dashboard/inference", label: "Inférence", icon: Images },
-  { href: "/dashboard/tagged", label: "Résultats annotées", icon: Tag },
+  { href: "/dashboard/tagged", label: "Résultats annotés", icon: Tag },
   { href: "/dashboard/users", label: "Utilisateurs", icon: Users },
   { href: "/dashboard/birads", label: "Guide BI-RADS", icon: BookOpen },
 ];

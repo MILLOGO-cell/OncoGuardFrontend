@@ -1,62 +1,162 @@
-import apiClient, { get } from "./apiClient";
+// lib/api/filesApi.ts
 import { FileItem } from "@/types/files";
 
-export const listFiles = (params?: {
-  kind?: "png" | "dicom";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+export type FileKind = "dicom" | "pgm";
+
+export function downloadFileUrl(kind: FileKind, filename: string): string {
+  return `${API_BASE}/ingest/download/${kind}/${filename}`;
+}
+
+export function getPreviewUrl(kind: FileKind, filename: string): string {
+  return `${API_BASE}/ingest/preview/${kind}/${filename}`;
+}
+
+export async function fetchFileList(params: {
+  kind?: FileKind;
   q?: string;
   limit?: number;
   order?: "asc" | "desc";
-}) => {
-  const query = new URLSearchParams();
-  if (params?.kind) query.set("kind", params.kind);
-  if (params?.q) query.set("q", params.q);
-  if (params?.limit) query.set("limit", String(params.limit));
-  if (params?.order) query.set("order", params.order);
-  const qs = query.toString() ? `?${query.toString()}` : "";
-  return get<FileItem[]>(`/ingest/files${qs}`);
-};
+}): Promise<FileItem[]> {
+  const searchParams = new URLSearchParams();
+  
+  if (params.kind) searchParams.append("kind", params.kind);
+  if (params.q) searchParams.append("q", params.q);
+  if (params.limit) searchParams.append("limit", params.limit.toString());
+  if (params.order) searchParams.append("order", params.order);
 
-export const downloadFileUrl = (kind: "png" | "dicom", filename: string) =>
-  `${apiClient.defaults.baseURL}/ingest/download/${kind}/${encodeURIComponent(filename)}`;
+  const url = `${API_BASE}/ingest/files?${searchParams.toString()}`;
+  const response = await fetch(url);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch files: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
 
-export const exportZipAll = async (
-  kind: "png" | "dicom" = "png",
+export async function uploadFile(
+  kind: FileKind,
+  file: File,
   onProgress?: (pct: number) => void
-) => {
-  const { data } = await apiClient.post<Blob>(
-    `/ingest/export/zip?kind=${kind}&all_files=true`,
-    null,
-    {
-      responseType: "blob",
-      onDownloadProgress: (e) => {
-        if (!e.total) return;
-        const pct = Math.round((e.loaded * 100) / e.total);
-        onProgress?.(pct);
-      },
-    }
-  );
-  return data;
-};
+): Promise<FileItem> {
+  const formData = new FormData();
+  formData.append("file", file);
 
-export const exportZipSelected = async (
-  kind: "png" | "dicom",
-  filenames: string[],
+  const url = `${API_BASE}/ingest/upload?kind=${kind}`;
+  
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable && onProgress) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        onProgress(pct);
+      }
+    });
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText));
+      } else {
+        reject(new Error(`Upload failed: ${xhr.statusText}`));
+      }
+    });
+
+    xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+    xhr.addEventListener("abort", () => reject(new Error("Upload aborted")));
+
+    xhr.open("POST", url);
+    xhr.send(formData);
+  });
+}
+
+export async function uploadFilesBatch(
+  kind: FileKind,
+  files: File[],
   onProgress?: (pct: number) => void
-) => {
-  const qs = new URLSearchParams();
-  qs.set("kind", kind);
-  filenames.forEach((n) => qs.append("filenames", n));
-  const { data } = await apiClient.post<Blob>(
-    `/ingest/export/zip?${qs.toString()}`,
-    null,
-    {
-      responseType: "blob",
-      onDownloadProgress: (e) => {
-        if (!e.total) return;
-        const pct = Math.round((e.loaded * 100) / e.total);
-        onProgress?.(pct);
-      },
-    }
-  );
-  return data;
-};
+): Promise<FileItem[]> {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file));
+
+  const url = `${API_BASE}/ingest/upload-batch?kind=${kind}`;
+  
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable && onProgress) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        onProgress(pct);
+      }
+    });
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText));
+      } else {
+        reject(new Error(`Upload failed: ${xhr.statusText}`));
+      }
+    });
+
+    xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+    xhr.addEventListener("abort", () => reject(new Error("Upload aborted")));
+
+    xhr.open("POST", url);
+    xhr.send(formData);
+  });
+}
+
+export async function deleteFile(kind: FileKind, filename: string): Promise<void> {
+  const url = `${API_BASE}/ingest/delete/${kind}/${filename}`;
+  const response = await fetch(url, { method: "DELETE" });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to delete file: ${response.statusText}`);
+  }
+}
+
+export async function downloadSelectedZip(
+  kind: FileKind,
+  filenames: string[]
+): Promise<Blob> {
+  const params = new URLSearchParams();
+  params.append("kind", kind);
+  filenames.forEach(name => params.append("filenames", name));
+
+  const url = `${API_BASE}/ingest/export/zip?${params.toString()}`;
+  const response = await fetch(url, { method: "POST" });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to download ZIP: ${response.statusText}`);
+  }
+  
+  return response.blob();
+}
+
+export async function downloadAllZip(kind: FileKind): Promise<Blob> {
+  const params = new URLSearchParams();
+  params.append("kind", kind);
+  params.append("all_files", "true");
+
+  const url = `${API_BASE}/ingest/export/zip?${params.toString()}`;
+  const response = await fetch(url, { method: "POST" });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to download ZIP: ${response.statusText}`);
+  }
+  
+  return response.blob();
+}
+
+export function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
