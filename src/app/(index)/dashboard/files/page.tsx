@@ -1,22 +1,23 @@
-// src/app/(index)/files/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useFiles } from "@/hooks/useFiles";
 import { useFilesStore } from "@/store/filesStore";
-import { downloadFileUrl } from "@/lib/api/filesApi";
+import { downloadFileUrl, getPreviewUrl } from "@/lib/api/filesApi";
 import Button from "@/components/ui/Button";
 import Loading from "@/components/ui/Loading";
+import ImagePreview from "@/components/ui/ImagePreview";
 
 function ProgressBar({ value, label }: { value: number; label: string }) {
+  const pct = Math.max(0, Math.min(100, value));
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>{label}</span>
-        <span>{Math.max(0, Math.min(100, value))}%</span>
+        <span>{pct}%</span>
       </div>
       <div className="h-2 w-full rounded bg-muted overflow-hidden">
-        <div className="h-2 bg-primary" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+        <div className="h-2 bg-primary transition-all" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -25,23 +26,37 @@ function ProgressBar({ value, label }: { value: number; label: string }) {
 const PAGE_SIZE = 10;
 
 export default function Page() {
-  const { fetchList, downloadAllZip, downloadSelectedZip } = useFiles();
-  const { items, downloading, progressPct, loading } = useFilesStore();
-  const [kind, setKind] = useState<"png" | "dicom">("png");
+  const { 
+    fetchList, 
+    uploadMultiple, 
+    removeFile, 
+    downloadAllZip, 
+    downloadSelectedZip 
+  } = useFiles();
+  
+  const { 
+    items, 
+    downloading, 
+    uploading, 
+    progressPct, 
+    uploadProgressPct, 
+    loading 
+  } = useFilesStore();
+
+  const [kind, setKind] = useState<"dicom" | "pgm">("dicom");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const anySelected = useMemo(() => Object.values(selected).some(Boolean), [selected]);
 
   useEffect(() => {
-    // On récupère (jusqu’à) 500 max mais on n’affiche que 10/ page
     fetchList({ kind, limit: 500, order: "desc" });
     setSelected({});
     setPage(1);
-  }, [kind]);
+  }, [kind, fetchList]);
 
-  const toggle = (name: string) =>
-    setSelected((prev) => ({ ...prev, [name]: !prev[name] }));
+  const toggle = (name: string) => setSelected((prev) => ({ ...prev, [name]: !prev[name] }));
 
   const selectedNames = useMemo(
     () => Object.entries(selected).filter(([, v]) => v).map(([k]) => k),
@@ -57,45 +72,101 @@ export default function Page() {
   const canPrev = page > 1;
   const canNext = page < totalPages;
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      await uploadMultiple(kind, Array.from(files));
+    } catch (error) {
+      console.error("Upload error:", error);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async (filename: string) => {
+    if (!confirm(`Supprimer ${filename} ?`)) return;
+    
+    try {
+      await removeFile(kind, filename);
+      setSelected((prev) => {
+        const next = { ...prev };
+        delete next[filename];
+        return next;
+      });
+    } catch (error) {
+      console.error("Delete error:", error);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6 relative">
-      {(loading || downloading) && <Loading overlay variant="spinner" />}
+      {(loading || downloading || uploading) && <Loading overlay variant="spinner" />}
 
-      <h1 className="text-2xl font-semibold">Images anonymisées</h1>
+      <h1 className="text-2xl font-semibold">Fichiers</h1>
 
+      {/* Upload section */}
+      <div className="rounded-xl border p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium">Uploader des fichiers</h2>
+          <select
+            className="border rounded-md px-3 py-2 text-sm"
+            value={kind}
+            onChange={(e) => setKind(e.target.value as "dicom" | "pgm")}
+            disabled={uploading}
+          >
+            <option value="dicom">DICOM</option>
+            <option value="pgm">PGM</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={kind === "dicom" ? ".dcm,.dicom" : ".png,.jpg,.jpeg,.pgm"}
+            onChange={handleFileSelect}
+            disabled={uploading}
+            className="flex-1 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
+          />
+          <Button
+            variant="secondary"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            Parcourir
+          </Button>
+        </div>
+
+        {uploading && (
+          <ProgressBar value={uploadProgressPct} label="Upload en cours" />
+        )}
+      </div>
+
+      {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
-        <select
-          className="border rounded-md px-3 py-2 text-sm"
-          value={kind}
-          onChange={(e) => setKind(e.target.value as "png" | "dicom")}
-          disabled={downloading}
-        >
-          <option value="png">PNG</option>
-          <option value="dicom">DICOM</option>
-        </select>
-
         <Button
           onClick={() => {
             fetchList({ kind, limit: 500, order: "desc" });
             setPage(1);
           }}
-          disabled={downloading}
+          disabled={downloading || uploading}
         >
           Rafraîchir
         </Button>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button
-            variant="ghost"
-            onClick={() => setPage(1)}
-            disabled={!canPrev || downloading}
-          >
+          <Button variant="ghost" onClick={() => setPage(1)} disabled={!canPrev || downloading || uploading}>
             «
           </Button>
           <Button
             variant="ghost"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={!canPrev || downloading}
+            disabled={!canPrev || downloading || uploading}
           >
             Préc.
           </Button>
@@ -105,14 +176,14 @@ export default function Page() {
           <Button
             variant="ghost"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={!canNext || downloading}
+            disabled={!canNext || downloading || uploading}
           >
             Suiv.
           </Button>
           <Button
             variant="ghost"
             onClick={() => setPage(totalPages)}
-            disabled={!canNext || downloading}
+            disabled={!canNext || downloading || uploading}
           >
             »
           </Button>
@@ -121,19 +192,20 @@ export default function Page() {
         <Button
           variant="secondary"
           onClick={() => downloadAllZip(kind)}
-          disabled={downloading || loading}
+          disabled={downloading || loading || uploading}
         >
           Exporter tout (ZIP)
         </Button>
         <Button
           variant="secondary"
-          disabled={!anySelected || downloading}
+          disabled={!anySelected || downloading || uploading}
           onClick={() => downloadSelectedZip(kind, selectedNames)}
         >
           Exporter sélection (ZIP)
         </Button>
       </div>
 
+      {/* Download progress */}
       {downloading && (
         <div className="rounded-xl border p-4 space-y-2">
           <div className="text-sm text-muted-foreground">Téléchargement en cours</div>
@@ -141,6 +213,7 @@ export default function Page() {
         </div>
       )}
 
+      {/* Files grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {pageItems.map((f) => (
           <div key={`${f.kind}-${f.filename}`} className="rounded-xl border p-4 space-y-3">
@@ -150,36 +223,46 @@ export default function Page() {
                 type="checkbox"
                 checked={!!selected[f.filename]}
                 onChange={() => toggle(f.filename)}
-                disabled={downloading}
+                disabled={downloading || uploading}
               />
             </div>
 
-            {f.kind === "png" ? (
-              <img
-                src={downloadFileUrl("png", f.filename)}
-                alt={f.filename}
-                className="w-full h-48 object-contain bg-muted rounded"
-                loading="lazy"
-              />
-            ) : (
-              <div className="h-48 grid place-items-center bg-muted rounded text-xs text-muted-foreground">
-                DICOM
-              </div>
-            )}
+            {/* Image preview */}
+            <ImagePreview 
+              kind={f.kind as "dicom" | "pgm"}
+              filename={f.filename}
+              previewUrl={getPreviewUrl(f.kind as "dicom" | "pgm", f.filename)}
+              className="h-48"
+            />
 
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{(f.size_bytes / 1024).toFixed(1)} Ko</span>
-              <a
-                className="underline"
-                href={downloadFileUrl(f.kind, f.filename)}
-                download
-              >
-                Télécharger
-              </a>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">{(f.size_bytes / 1024).toFixed(1)} Ko</span>
+              <div className="flex items-center gap-2">
+                <a
+                  className="underline text-muted-foreground hover:text-foreground"
+                  href={downloadFileUrl(f.kind as "dicom" | "pgm", f.filename)}
+                  download
+                >
+                  Télécharger
+                </a>
+                <button
+                  onClick={() => handleDelete(f.filename)}
+                  disabled={uploading || downloading}
+                  className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                >
+                  Supprimer
+                </button>
+              </div>
             </div>
           </div>
         ))}
       </div>
+
+      {items.length === 0 && !loading && (
+        <div className="text-center py-12 text-muted-foreground">
+          Aucun fichier {kind === "dicom" ? "DICOM" : "PGM"}. I-en un ci-dessus.
+        </div>
+      )}
     </div>
   );
 }

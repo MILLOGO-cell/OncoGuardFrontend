@@ -1,68 +1,125 @@
-// src/hooks/useUsers.ts
-import { toast } from "react-toastify"
-import { deleteUser, getUser, listUsers, updateUser } from "@/lib/api/authApi"
-import { UserOut, UserUpdate } from "@/types/auth"
-import { useUserAdminStore } from "@/store/userAdminStore"
+// hooks/useUsers.ts
+import { useCallback } from "react";
+import { toast } from "react-toastify";
+import { useUserAdminStore } from "@/store/userAdminStore";
+import {
+  fetchAllUsers,
+  fetchUserById,
+  createUserAsAdmin,
+  updateUserAsAdmin,
+  deleteUserAsAdmin,
+} from "@/lib/api/usersAdminApi";
+import type { UserCreate, UserUpdate } from "@/types/auth";
 
 export function useUsers() {
-  const { setLoading, setItems, setSelected } = useUserAdminStore()
+  const { setLoading, setItems, setSelected } = useUserAdminStore();
 
-  const fetchUsers = async () => {
+  /**
+   * Récupère la liste de tous les utilisateurs
+   */
+  const fetchUsers = useCallback(async () => {
     try {
-      setLoading(true)
-      const res = await listUsers()
-      setItems(res)
-      return res
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Échec du chargement")
-      throw e
+      setLoading(true);
+      const users = await fetchAllUsers();
+      setItems(users);
+    } catch (error: any) {
+      console.error("Erreur lors de la récupération des utilisateurs:", error);
+      toast.error(error?.response?.data?.detail || "Erreur lors du chargement des utilisateurs");
+      throw error;
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  }, [setLoading, setItems]);
 
-  const fetchUser = async (userId: number) => {
-    try {
-      setLoading(true)
-      const res = await getUser(userId)
-      setSelected(res)
-      return res
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Utilisateur introuvable")
-      throw e
-    } finally {
-      setLoading(false)
-    }
-  }
+  /**
+   * Récupère un utilisateur par ID
+   */
+  const fetchUser = useCallback(
+    async (userId: number) => {
+      try {
+        setLoading(true);
+        const user = await fetchUserById(userId);
+        setSelected(user);
+        return user;
+      } catch (error: any) {
+        console.error("Erreur lors de la récupération de l'utilisateur:", error);
+        toast.error(error?.response?.data?.detail || "Utilisateur introuvable");
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setLoading, setSelected]
+  );
 
-  const saveUser = async (userId: number, payload: UserUpdate) => {
-    try {
-      setLoading(true)
-      const res = await updateUser(userId, payload)
-      setSelected(res as UserOut)
-      toast.success("Utilisateur mis à jour")
-      return res
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Échec de la mise à jour")
-      throw e
-    } finally {
-      setLoading(false)
-    }
-  }
+  /**
+   * Crée un nouvel utilisateur (admin uniquement)
+   * ⚠️ N'affecte PAS l'utilisateur connecté
+   */
+  const createUser = useCallback(
+    async (payload: UserCreate) => {
+      try {
+        setLoading(true);
+        const newUser = await createUserAsAdmin(payload);
+        toast.success(`Utilisateur ${newUser.email} créé avec succès`);
+        return newUser;
+      } catch (error: any) {
+        console.error("Erreur lors de la création de l'utilisateur:", error);
+        toast.error(error?.response?.data?.detail || "Erreur lors de la création");
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setLoading]
+  );
 
-  const removeUser = async (userId: number) => {
-    try {
-      setLoading(true)
-      await deleteUser(userId)
-      toast.success("Utilisateur supprimé")
-      return true
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Échec de la suppression")
-      throw e
-    } finally {
-      setLoading(false)
-    }
-  }
+  /**
+   * Met à jour un utilisateur
+   */
+  const saveUser = useCallback(
+    async (userId: number, payload: UserUpdate) => {
+      try {
+        setLoading(true);
+        const updatedUser = await updateUserAsAdmin(userId, payload);
+        toast.success("Utilisateur mis à jour");
+        return updatedUser;
+      } catch (error: any) {
+        console.error("Erreur lors de la mise à jour:", error);
+        toast.error(error?.response?.data?.detail || "Erreur lors de la mise à jour");
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setLoading]
+  );
 
-  return { fetchUsers, fetchUser, saveUser, removeUser }
+  /**
+   * Supprime un utilisateur
+   */
+  const removeUser = useCallback(
+    async (userId: number) => {
+      try {
+        setLoading(true);
+        await deleteUserAsAdmin(userId);
+        toast.success("Utilisateur supprimé");
+      } catch (error: any) {
+        console.error("Erreur lors de la suppression:", error);
+        toast.error(error?.response?.data?.detail || "Erreur lors de la suppression");
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setLoading]
+  );
+
+  return {
+    fetchUsers,
+    fetchUser,
+    createUser,
+    saveUser,
+    removeUser,
+  };
 }

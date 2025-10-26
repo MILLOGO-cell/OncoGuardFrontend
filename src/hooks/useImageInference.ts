@@ -1,112 +1,104 @@
-// src/hooks/useImageInference.ts
-import { toast } from "react-toastify";
-import { useImageStore } from "@/store/imageStore";
-import { predictImage, predictBatch } from "@/lib/api/imageApi";
-import type { InferenceResponse } from "@/types/imageInference";
+// hooks/useImageInference.ts
+import { useCallback } from "react";
+import {
+  predict,
+  predictBatch,
+  InferenceResponse,
+  predictFromServer,
+} from "@/lib/api/imageInferenceApi";
 
-type ProgressHandlers = {
+type ProgressCallbacks = {
   onUploadPct?: (pct: number) => void;
   onProcessPct?: (pct: number) => void;
 };
 
 export function useImageInference() {
-  const {
-    setLoading,
-    setResult,
-    setResults,
-    setUploadPct,
-    setProcessPct,
-    setMode,
-    reset,
-  } = useImageStore();
+  /**
+   * Prédiction d'un seul fichier (depuis l'ordinateur)
+   */
+  const predictOne = useCallback(
+    async (file: File, callbacks?: ProgressCallbacks): Promise<InferenceResponse> => {
+      return predict(file, callbacks);
+    },
+    []
+  );
 
-  const predictOne = async (file: File, p?: ProgressHandlers) => {
-    try {
-      setMode("single");
-      setLoading(true);
-      setUploadPct(0);
-      setProcessPct(0);
-      const res = await predictImage(file);
-      setResult(res);
-      setResults([res]);
-      setUploadPct(100);
-      setProcessPct(100);
-      p?.onUploadPct?.(100);
-      p?.onProcessPct?.(100);
-      toast.success("Analyse terminée");
-      return res;
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Échec de l’analyse");
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  };
+  /**
+   * Prédiction batch de plusieurs fichiers (depuis l'ordinateur)
+   */
+  const predictManyBatch = useCallback(
+    async (
+      files: File[],
+      returnAnnotated: boolean = true,
+      callbacks?: ProgressCallbacks
+    ): Promise<InferenceResponse[]> => {
+      return predictBatch(files, returnAnnotated, callbacks);
+    },
+    []
+  );
 
-  const predictManyBatch = async (
-    files: File[],
-    persist = true,
-    p?: ProgressHandlers
-  ) => {
-    try {
-      setMode("batch");
-      setLoading(true);
-      setUploadPct(0);
-      setProcessPct(0);
-      const res = await predictBatch(files, (pct) => {
-        setUploadPct(pct);
-        p?.onUploadPct?.(pct);
-      }, persist);
-      setResults(res);
-      setResult(res[0] ?? null);
-      setProcessPct(100);
-      p?.onProcessPct?.(100);
-      toast.success("Analyses terminées");
-      return res;
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Échec des analyses");
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  };
+  /**
+   * Prédiction séquentielle de plusieurs fichiers (depuis l'ordinateur)
+   */
+  const predictManySequential = useCallback(
+    async (
+      files: File[],
+      returnAnnotated: boolean = true,
+      callbacks?: ProgressCallbacks
+    ): Promise<InferenceResponse[]> => {
+      const results: InferenceResponse[] = [];
+      const total = files.length;
 
-  const predictManySequential = async (
-    files: File[],
-    persistEach = true,
-    p?: ProgressHandlers
-  ) => {
-    try {
-      setMode("sequential");
-      setLoading(true);
-      setUploadPct(0);
-      setProcessPct(0);
-      const out: InferenceResponse[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const res = await predictBatch(
-          [files[i]],
-          (pct) => {
-            setUploadPct(pct);
-            p?.onUploadPct?.(pct);
-          },
-          persistEach
-        );
-        out.push(res[0]);
-        const step = Math.round(((i + 1) * 100) / files.length);
-        setProcessPct(step);
-        p?.onProcessPct?.(step);
+      for (let i = 0; i < total; i++) {
+        const file = files[i];
+        
+        // Upload progress pour ce fichier
+        const onUpload = (pct: number) => {
+          const globalPct = ((i + pct / 100) / total) * 100;
+          callbacks?.onUploadPct?.(globalPct);
+        };
+
+        // Process progress pour ce fichier
+        const onProcess = (pct: number) => {
+          const globalPct = ((i + pct / 100) / total) * 100;
+          callbacks?.onProcessPct?.(globalPct);
+        };
+
+        const result = await predict(file, {
+          onUploadPct: onUpload,
+          onProcessPct: onProcess,
+        });
+
+        results.push(result);
       }
-      setResults(out);
-      setResult(out[0] ?? null);
-      toast.success("Analyses terminées");
-      return out;
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Échec des analyses");
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  return { predictOne, predictManyBatch, predictManySequential, reset };
+      // Compléter les barres de progression
+      callbacks?.onUploadPct?.(100);
+      callbacks?.onProcessPct?.(100);
+
+      return results;
+    },
+    []
+  );
+
+  /**
+   * Prédiction depuis des fichiers déjà uploadés sur le serveur
+   */
+  const predictFromUploadedFiles = useCallback(
+    async (
+      kind: "dicom" | "pgm",
+      filenames: string[],
+      callbacks?: ProgressCallbacks
+    ): Promise<InferenceResponse[]> => {
+      return predictFromServer(kind, filenames, callbacks);
+    },
+    []
+  );
+
+  return {
+    predictOne,
+    predictManyBatch,
+    predictManySequential,
+    predictFromUploadedFiles,
+  };
 }
