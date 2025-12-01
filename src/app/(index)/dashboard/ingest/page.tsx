@@ -1,23 +1,22 @@
-// src/app/(index)/ingest/page.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import Button from "@/components/ui/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
-import { useIngest } from "@/hooks/useIngest";
-import { useIngestStore } from "@/store/ingestStore";
 import Image from "next/image";
 
 function ProgressBar({ value, label }: { value: number; label: string }) {
   const v = Math.max(0, Math.min(100, value));
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{label}</span>
-        <span>{v}%</span>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium text-gray-700">{label}</span>
+        <span className="text-gray-500">{v}%</span>
       </div>
-      <div className="h-2 w-full rounded bg-muted overflow-hidden">
-        <div className="h-2 bg-primary" style={{ width: `${v}%` }} />
+      <div className="h-2.5 w-full rounded-full bg-gray-200 overflow-hidden">
+        <div
+          className="h-full bg-blue-600 transition-all duration-300 ease-out"
+          style={{ width: `${v}%` }}
+        />
       </div>
     </div>
   );
@@ -45,13 +44,9 @@ function toPreviewItem(file: File): PreviewItem {
 }
 
 export default function Page() {
-  const { run } = useIngest();
-  const { loading, progressPct, lastResponse } = useIngestStore();
-
   const [files, setFiles] = useState<PreviewItem[]>([]);
-  const [runInference, setRunInference] = useState(true);
-  const [persist, setPersist] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -60,8 +55,7 @@ export default function Page() {
     return () => {
       files.forEach((p) => p.url && URL.revokeObjectURL(p.url));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [files]);
 
   const totalCount = files.length;
   const imageCount = files.filter((f) => f.type === "image").length;
@@ -71,6 +65,7 @@ export default function Page() {
 
   const addFiles = (picked: FileList | File[]) => {
     setErrorMsg(null);
+    setSuccessMsg(null);
     const list = Array.from(picked || []);
     if (!list.length) {
       setErrorMsg("Aucun fichier sélectionné.");
@@ -134,188 +129,235 @@ export default function Page() {
     });
   };
 
+  const clearAll = () => {
+    files.forEach((p) => p.url && URL.revokeObjectURL(p.url));
+    setFiles([]);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
+
     if (!files.length) {
-      setErrorMsg("Sélectionnez au moins un fichier avant de démarrer.");
+      setErrorMsg("Sélectionnez au moins un fichier avant de continuer.");
       return;
     }
-    await run(
-      files.map((f) => f.file),
-      { run_inference: runInference, persist }
-    );
+
+    setSuccessMsg(`${files.length} fichier${files.length > 1 ? "s" : ""} prêt${files.length > 1 ? "s" : ""} pour le traitement.`);
   };
 
   const hasSelected = files.length > 0;
 
-  const generatedItems =
-    lastResponse?.processed.filter((it) => it.anonymized_png) ?? [];
-
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Anonymisation & Prédiction</h1>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Import de fichiers</h1>
+          <p className="mt-2 text-gray-600">
+            Importez vos images mammographiques et fichiers DICOM pour analyse
+          </p>
+        </div>
 
-      <form onSubmit={onSubmit} className="rounded-xl border p-6 space-y-5">
-        <div
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          role="button"
-          tabIndex={0}
-          onClick={onPickClick}
-          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onPickClick()}
-          className={[
-            "rounded-lg border-2 border-dashed p-6 transition-colors cursor-pointer",
-            isDragOver ? "border-primary bg-primary/5" : "border-muted-foreground/30",
-          ].join(" ")}
-          aria-label="Zone de dépôt des fichiers"
-        >
-          <div className="text-center space-y-2">
-            <div className="text-sm font-medium">
-              Glissez-déposez vos fichiers DICOM ou images ici
+        <form onSubmit={onSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-6">
+          <div
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            className={`rounded-xl border-2 border-dashed p-12 transition-all ${isDragOver
+                ? "border-blue-500 bg-blue-50 scale-[1.02]"
+                : "border-gray-300 hover:border-blue-400 hover:bg-blue-50/50"
+              }`}
+          >
+            <div className="flex flex-col items-center justify-center text-center space-y-4">
+              <div className={`p-4 rounded-full ${isDragOver ? "bg-blue-100" : "bg-gray-100"}`}>
+                <svg
+                  className={`w-12 h-12 ${isDragOver ? "text-blue-600" : "text-gray-400"}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+              </div>
+              <div>
+                <p className="text-base font-semibold text-gray-900">
+                  Glissez-déposez vos fichiers ici
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  ou{" "}
+                  <button
+                    type="button"
+                    onClick={onPickClick}
+                    className="text-blue-600 hover:text-blue-700 font-medium underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+                  >
+                    cliquez pour parcourir
+                  </button>
+                </p>
+              </div>
+              <div className="text-xs text-gray-500">
+                Formats acceptés : PNG, JPG, JPEG, BMP, TIFF, WEBP, DICOM
+              </div>
             </div>
-            <div className="text-xs text-muted-foreground">
-              ou cliquez pour parcourir vos fichiers (formats acceptés : {ACCEPT})
-            </div>
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              onChange={onFiles}
+              accept={ACCEPT}
+              className="hidden"
+              aria-label="Sélectionner des fichiers"
+            />
           </div>
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            onChange={onFiles}
-            accept={ACCEPT}
-            disabled={loading}
-            className="hidden"
-          />
-        </div>
 
-        <div className="text-sm">
-          {hasSelected ? (
-            <div className="text-muted-foreground">
-              {totalCount} fichier(s) sélectionné(s) — {imageCount} image(s), {dicomCount} DICOM
-            </div>
-          ) : (
-            <div className="text-muted-foreground">Aucun fichier sélectionné.</div>
-          )}
-        </div>
+          {hasSelected && (
+            <div className="bg-gray-50 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-sm font-semibold text-gray-700">
+                  {totalCount} fichier{totalCount > 1 ? "s" : ""} sélectionné{totalCount > 1 ? "s" : ""}
+                  <span className="text-gray-500 font-normal ml-2">
+                    ({imageCount} image{imageCount > 1 ? "s" : ""}, {dicomCount} DICOM)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="text-sm text-red-600 hover:text-red-700 font-medium"
+                >
+                  Tout effacer
+                </button>
+              </div>
 
-        {hasSelected && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {files.map((p, idx) => (
-              <div key={idx} className="rounded-lg border p-3 space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{p.file.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {(p.file.size / 1024 / 1024).toFixed(2)} Mo • {p.type.toUpperCase()}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {files.map((p, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-white rounded-lg border border-gray-200 p-4 space-y-3 hover:shadow-md transition-shadow"
+                  >
+                    {p.url ? (
+                      <div className="aspect-square overflow-hidden rounded-lg bg-gray-100">
+                        <img
+                          src={p.url}
+                          alt={p.file.name}
+                          className="h-full w-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="aspect-square overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
+                        <div className="text-center p-4">
+                          <svg
+                            className="w-12 h-12 text-gray-400 mx-auto mb-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            />
+                          </svg>
+                          <p className="text-xs text-gray-500">DICOM</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-gray-900">
+                            {p.file.name}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-gray-500">
+                              {(p.file.size / 1024 / 1024).toFixed(2)} Mo
+                            </span>
+                            <span className={`px-2 py-0.5 text-xs font-semibold rounded ${p.type === "image"
+                                ? "bg-green-100 text-green-700"
+                                : p.type === "dicom"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : "bg-gray-100 text-gray-700"
+                              }`}>
+                              {p.type.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(idx)}
+                          className="text-gray-400 hover:text-red-600 transition-colors"
+                          aria-label="Supprimer"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => removeFile(idx)}
-                    disabled={loading}
-                  >
-                    Retirer
-                  </Button>
-                </div>
-                {p.url ? (
-                  <div className="aspect-square overflow-hidden rounded-md bg-muted">
-                    <img src={p.url} alt={p.file.name} className="h-full w-full object-contain" />
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground">
-                    Aperçu non disponible
-                  </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-6 pt-2">
-          <Checkbox
-            checked={runInference}
-            onCheckedChange={(v) => setRunInference(Boolean(v))}
-            label="Lancer l’inférence"
-            disabled={loading}
-          />
-          <Checkbox
-            checked={persist}
-            onCheckedChange={(v) => setPersist(Boolean(v))}
-            label="Enregistrer en base"
-            disabled={loading}
-          />
-        </div>
-
-        {loading && (
-          <div className="rounded-xl border p-4 space-y-2">
-            <div className="text-sm text-muted-foreground">
-              Téléversement et traitement en cours…
             </div>
-            <ProgressBar value={progressPct} label="Progression" />
-          </div>
-        )}
+          )}
 
-        {errorMsg && <div className="text-sm text-red-500">{errorMsg}</div>}
+          {errorMsg && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-red-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <p className="text-sm text-red-800">{errorMsg}</p>
+              </div>
+            </div>
+          )}
 
-        <div className="pt-2">
-          <Button type="submit" disabled={loading || !hasSelected}>
-            Démarrer l’anonymisation
+          {successMsg && (
+            <div className="rounded-lg bg-green-50 border border-green-200 p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-green-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <p className="text-sm text-green-800">{successMsg}</p>
+              </div>
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            disabled={!hasSelected}
+            className="w-full py-3 text-base font-semibold"
+          >
+            Valider la sélection ({totalCount})
           </Button>
-        </div>
-      </form>
+        </form>
 
-      {lastResponse && (
-        <div className="rounded-xl border p-6 space-y-4">
-          <div className="text-sm text-muted-foreground">Résultats</div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border p-4">
-              <div className="text-xs text-muted-foreground">Photos importées</div>
-              <div className="text-2xl font-semibold">{lastResponse.counts.uploaded_photos}</div>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+          <div className="flex items-start gap-4">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </div>
-            <div className="rounded-lg border p-4">
-              <div className="text-xs text-muted-foreground">DICOM importés</div>
-              <div className="text-2xl font-semibold">{lastResponse.counts.uploaded_dicoms}</div>
-            </div>
-            <div className="rounded-lg border p-4">
-              <div className="text-xs text-muted-foreground">PNG anonymisés</div>
-              <div className="text-2xl font-semibold">{lastResponse.counts.new_anonymized_png}</div>
-            </div>
-            <div className="rounded-lg border p-4">
-              <div className="text-xs text-muted-foreground">Prédictions</div>
-              <div className="text-2xl font-semibold">{lastResponse.counts.predictions_done}</div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-blue-900 mb-1">
+                Information
+              </h3>
+              <p className="text-sm text-blue-800">
+                Les fichiers sélectionnés seront disponibles pour analyse sur la page <strong>Inférence</strong>.
+                Cette étape permet uniquement de valider votre sélection avant le traitement.
+              </p>
             </div>
           </div>
-
-          <div className="text-sm font-medium">Images anonymisées</div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {generatedItems.map((it, idx) => (
-              <div key={idx} className="rounded-lg border p-4 space-y-3">
-                {it.anonymized_png && (
-                  <div className="aspect-square overflow-hidden rounded-md bg-muted relative">
-                    <Image
-                      src={it.prediction?.tagged_url || it.anonymized_png}
-                      alt={it.anonymized_image_id || it.original_filename || "Image anonymisée"}
-                      fill
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                      className="object-contain"
-                    />
-                  </div>
-                )}
-                {it.prediction && (
-                  <div className="text-sm">
-                    <span className="font-medium">{it.prediction.label}</span> • {it.prediction.birads} •{" "}
-                    {(it.prediction.confidence * 100).toFixed(1)}%
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

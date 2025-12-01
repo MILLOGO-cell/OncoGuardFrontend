@@ -3,8 +3,6 @@ import { useCallback } from "react";
 import { useFilesStore } from "@/store/filesStore";
 import {
   fetchFileList,
-  uploadFile,
-  uploadFilesBatch,
   deleteFile,
   downloadAllZip,
   downloadSelectedZip,
@@ -15,13 +13,10 @@ import {
 export function useFiles() {
   const { 
     setLoading, 
-    setUploading,
     setDownloading, 
     setProgressPct, 
-    setUploadProgressPct,
     setItems, 
     resetProgress,
-    resetUploadProgress,
   } = useFilesStore();
 
   const fetchList = useCallback(
@@ -46,55 +41,10 @@ export function useFiles() {
     [setLoading, setItems]
   );
 
-  const uploadSingle = useCallback(
-    async (kind: FileKind, file: File) => {
-      setUploading(true);
-      setUploadProgressPct(0);
-      
-      try {
-        await uploadFile(kind, file, (pct) => setUploadProgressPct(pct));
-        setUploadProgressPct(100);
-        
-        // Refresh la liste après upload
-        await fetchList({ kind, limit: 500, order: "desc" });
-        
-        setTimeout(() => resetUploadProgress(), 1000);
-      } catch (error) {
-        console.error("Error uploading file:", error);
-        resetUploadProgress();
-        throw error;
-      }
-    },
-    [setUploading, setUploadProgressPct, resetUploadProgress, fetchList]
-  );
-
-  const uploadMultiple = useCallback(
-    async (kind: FileKind, files: File[]) => {
-      setUploading(true);
-      setUploadProgressPct(0);
-      
-      try {
-        await uploadFilesBatch(kind, files, (pct) => setUploadProgressPct(pct));
-        setUploadProgressPct(100);
-        
-        // Refresh la liste après upload
-        await fetchList({ kind, limit: 500, order: "desc" });
-        
-        setTimeout(() => resetUploadProgress(), 1000);
-      } catch (error) {
-        console.error("Error uploading files:", error);
-        resetUploadProgress();
-        throw error;
-      }
-    },
-    [setUploading, setUploadProgressPct, resetUploadProgress, fetchList]
-  );
-
   const removeFile = useCallback(
     async (kind: FileKind, filename: string) => {
       try {
         await deleteFile(kind, filename);
-        // Refresh la liste après suppression
         await fetchList({ kind, limit: 500, order: "desc" });
       } catch (error) {
         console.error("Error deleting file:", error);
@@ -162,8 +112,6 @@ export function useFiles() {
 
   return {
     fetchList,
-    uploadSingle,
-    uploadMultiple,
     removeFile,
     downloadAllZip: downloadAll,
     downloadSelectedZip: downloadSelected,

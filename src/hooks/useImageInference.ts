@@ -2,8 +2,6 @@
 import { useCallback } from "react";
 import {
   predict,
-  predictBatch,
-  predictFromServer,
   getModelInfo,
 } from "@/lib/api/imageInferenceApi";
 import type {
@@ -25,17 +23,6 @@ export function useImageInference() {
       callbacks?: ProgressCallbacks
     ): Promise<InferenceResponse> => {
       return predict(file, payload, callbacks);
-    },
-    []
-  );
-
-  const predictManyBatch = useCallback(
-    async (
-      files: File[],
-      payload?: PredictPayload,
-      callbacks?: ProgressCallbacks
-    ): Promise<InferenceResponse[]> => {
-      return predictBatch(files, payload, callbacks);
     },
     []
   );
@@ -86,22 +73,9 @@ export function useImageInference() {
     []
   );
 
-  const predictFromUploadedFiles = useCallback(
-    async (
-      kind: "dicom" | "pgm",
-      filenames: string[],
-      callbacks?: ProgressCallbacks
-    ): Promise<InferenceResponse[]> => {
-      return predictFromServer(kind, filenames, callbacks);
-    },
-    []
-  );
-
   return {
     fetchModelInfo,
     predictOne,
-    predictManyBatch,
     predictManySequential,
-    predictFromUploadedFiles,
   };
 }

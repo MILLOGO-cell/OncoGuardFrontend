@@ -1,4 +1,3 @@
-// lib/api/filesApi.ts
 import { FileItem } from "@/types/files";
 
 const API_BASE = "https://vcgckw80k8gc0c88osk0kk4w.37.27.42.12.sslip.io/api/v1";
@@ -7,10 +6,6 @@ export type FileKind = "dicom" | "pgm";
 
 export function downloadFileUrl(kind: FileKind, filename: string): string {
   return `${API_BASE}/ingest/download/${kind}/${filename}`;
-}
-
-export function getPreviewUrl(kind: FileKind, filename: string): string {
-  return `${API_BASE}/ingest/preview/${kind}/${filename}`;
 }
 
 export async function fetchFileList(params: {
@@ -34,78 +29,6 @@ export async function fetchFileList(params: {
   }
   
   return response.json();
-}
-
-export async function uploadFile(
-  kind: FileKind,
-  file: File,
-  onProgress?: (pct: number) => void
-): Promise<FileItem> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const url = `${API_BASE}/ingest/upload?kind=${kind}`;
-  
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    
-    xhr.upload.addEventListener("progress", (e) => {
-      if (e.lengthComputable && onProgress) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        onProgress(pct);
-      }
-    });
-
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(JSON.parse(xhr.responseText));
-      } else {
-        reject(new Error(`Upload failed: ${xhr.statusText}`));
-      }
-    });
-
-    xhr.addEventListener("error", () => reject(new Error("Upload failed")));
-    xhr.addEventListener("abort", () => reject(new Error("Upload aborted")));
-
-    xhr.open("POST", url);
-    xhr.send(formData);
-  });
-}
-
-export async function uploadFilesBatch(
-  kind: FileKind,
-  files: File[],
-  onProgress?: (pct: number) => void
-): Promise<FileItem[]> {
-  const formData = new FormData();
-  files.forEach((file) => formData.append("files", file));
-
-  const url = `${API_BASE}/ingest/upload-batch?kind=${kind}`;
-  
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    
-    xhr.upload.addEventListener("progress", (e) => {
-      if (e.lengthComputable && onProgress) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        onProgress(pct);
-      }
-    });
-
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(JSON.parse(xhr.responseText));
-      } else {
-        reject(new Error(`Upload failed: ${xhr.statusText}`));
-      }
-    });
-
-    xhr.addEventListener("error", () => reject(new Error("Upload failed")));
-    xhr.addEventListener("abort", () => reject(new Error("Upload aborted")));
-
-    xhr.open("POST", url);
-    xhr.send(formData);
-  });
 }
 
 export async function deleteFile(kind: FileKind, filename: string): Promise<void> {
