@@ -8,7 +8,8 @@ import axios, {
 } from "axios";
 import { toast } from "react-toastify";
 
-const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
+// const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
+const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://vcgckw80k8gc0c88osk0kk4w.37.27.42.12.sslip.io/api/v1";
 
 const apiClient: AxiosInstance = axios.create({
   baseURL,
