@@ -1,7 +1,7 @@
 // lib/api/filesApi.ts
 import { FileItem } from "@/types/files";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE = "https://vcgckw80k8gc0c88osk0kk4w.37.27.42.12.sslip.io/api/v1";
 
 export type FileKind = "dicom" | "pgm";
 
