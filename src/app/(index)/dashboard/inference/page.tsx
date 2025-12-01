@@ -20,7 +20,7 @@ function ProgressBar({ value, label }: { value: number; label: string }) {
         <span>{pct}%</span>
       </div>
       <div className="h-2 w-full rounded bg-muted overflow-hidden">
-        <div className="h-2 bg-primary" style={{ width: `${pct}%` }} />
+        <div className="h-2 bg-primary transition-all" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -34,24 +34,48 @@ function isPreviewable(name: string, type?: string) {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
-type InferenceTagged = InferenceResponse & { tagged_filename?: string | null; filename: string };
-
 type FileSource = "computer" | "uploaded";
+
+function extractBiradsInfo(resultClass: string | null) {
+  if (!resultClass) return { label: "Inconnu", birads: "BI-RADS 0" };
+  
+  const parts = resultClass.split(" - ");
+  const biradsCode = parts[0] || "0";
+  const description = parts[1] || "Inconnu";
+  
+  return {
+    label: description,
+    birads: `BI-RADS ${biradsCode}`,
+  };
+}
+
+function translateLabel(label: string) {
+  const lower = label.toLowerCase();
+  if (lower === "bénin" || lower === "benign") return "Bénin";
+  if (lower === "malin" || lower === "malignant") return "Malin";
+  if (lower === "normal") return "Normal";
+  if (lower === "probablement bénin") return "Probablement bénin";
+  if (lower === "suspicion faible") return "Suspicion faible";
+  if (lower === "suspicion intermédiaire") return "Suspicion intermédiaire";
+  if (lower === "suspicion forte") return "Suspicion forte";
+  if (lower === "évocateur de cancer") return "Évocateur de cancer";
+  if (lower === "cancer prouvé") return "Cancer prouvé";
+  return label;
+}
 
 export default function Page() {
   const { predictOne, predictManyBatch, predictManySequential, predictFromUploadedFiles } = useImageInference();
   const { fetchList } = useFiles();
   const { items: uploadedFiles, loading: loadingFiles } = useFilesStore();
 
-  // État pour les fichiers locaux
   const [localFiles, setLocalFiles] = useState<File[]>([]);
-  const [results, setResults] = useState<InferenceTagged[] | null>(null);
+  const [results, setResults] = useState<InferenceResponse[] | null>(null);
   const [uploadPct, setUploadPct] = useState(0);
   const [processPct, setProcessPct] = useState(0);
   const [mode, setMode] = useState<"single" | "batch" | "sequential">("single");
   const [isRunning, setIsRunning] = useState(false);
+  const [patientId, setPatientId] = useState<string>("");
 
-  // État pour la source des fichiers
   const [fileSource, setFileSource] = useState<FileSource>("computer");
   const [selectedKind, setSelectedKind] = useState<"dicom" | "pgm">("dicom");
   const [selectedUploaded, setSelectedUploaded] = useState<Record<string, boolean>>({});
@@ -59,14 +83,12 @@ export default function Page() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const objectURLsRef = useRef<Map<number, string>>(new Map());
 
-  // Charger les fichiers uploadés au montage
   useEffect(() => {
     if (fileSource === "uploaded") {
       fetchList({ kind: selectedKind, limit: 500, order: "desc" });
     }
   }, [fileSource, selectedKind, fetchList]);
 
-  // Previews pour les fichiers locaux
   const previews = useMemo(() => {
     objectURLsRef.current.forEach((url) => URL.revokeObjectURL(url));
     objectURLsRef.current.clear();
@@ -88,12 +110,10 @@ export default function Page() {
     };
   }, []);
 
-  // Fichiers uploadés sélectionnés
   const selectedUploadedFiles = useMemo(() => {
     return uploadedFiles.filter((f) => selectedUploaded[f.filename]);
   }, [uploadedFiles, selectedUploaded]);
 
-  // Vérifier si on peut lancer l'analyse
   const canRun = useMemo(() => {
     if (fileSource === "computer") {
       return mode === "single" ? localFiles.length === 1 : localFiles.length > 0;
@@ -112,10 +132,8 @@ export default function Page() {
 
   const toggleUploadedFile = (filename: string) => {
     if (mode === "single") {
-      // Mode single : sélectionner uniquement ce fichier
       setSelectedUploaded({ [filename]: true });
     } else {
-      // Mode multiple : toggle
       setSelectedUploaded((prev) => ({ ...prev, [filename]: !prev[filename] }));
     }
   };
@@ -128,44 +146,48 @@ export default function Page() {
     setUploadPct(0);
     setProcessPct(0);
 
+    const payload = patientId ? { patient_id: parseInt(patientId, 10) } : undefined;
+
     try {
       if (fileSource === "computer") {
-        // Analyse depuis l'ordinateur
         if (mode === "single" && localFiles[0]) {
-          const r = (await predictOne(localFiles[0], {
+          const r = await predictOne(localFiles[0], payload, {
             onUploadPct: setUploadPct,
             onProcessPct: setProcessPct,
-          })) as InferenceTagged;
+          });
           setResults([r]);
         } else if (mode === "batch") {
-          const rr = (await predictManyBatch(localFiles, true, { onUploadPct: setUploadPct })) as InferenceTagged[];
+          const rr = await predictManyBatch(localFiles, payload, {
+            onUploadPct: setUploadPct,
+          });
           setResults(rr);
           setProcessPct(100);
         } else if (mode === "sequential") {
-          const rr = (await predictManySequential(localFiles, true, {
+          const rr = await predictManySequential(localFiles, payload, {
             onUploadPct: setUploadPct,
             onProcessPct: setProcessPct,
-          })) as InferenceTagged[];
+          });
           setResults(rr);
         }
       } else {
-        // Analyse depuis fichiers uploadés
         const filenames = selectedUploadedFiles.map((f) => f.filename);
 
         if (mode === "single" && filenames[0]) {
           const r = await predictFromUploadedFiles(selectedKind, [filenames[0]], {
             onProcessPct: setProcessPct,
           });
-          setResults(r as InferenceTagged[]);
+          setResults(r);
         } else if (mode === "batch" || mode === "sequential") {
           const rr = await predictFromUploadedFiles(selectedKind, filenames, {
             onProcessPct: setProcessPct,
           });
-          setResults(rr as InferenceTagged[]);
+          setResults(rr);
         }
         setUploadPct(100);
         setProcessPct(100);
       }
+    } catch (error) {
+      console.error("Erreur lors de l'analyse:", error);
     } finally {
       setIsRunning(false);
     }
@@ -174,20 +196,22 @@ export default function Page() {
   const paired = useMemo(() => {
     if (!results) return [];
     return results.map((r, idx) => {
-      const serverUrl =
-        r.tagged_filename ? `${API_BASE}/image-inference/tagged/${encodeURIComponent(r.tagged_filename)}` : undefined;
+      const { label, birads } = extractBiradsInfo(r.result_class);
       const localUrl = fileSource === "computer" ? previews.get(idx) : undefined;
-      return { ...r, serverUrl, localUrl };
+      const uploadedFileUrl =
+        fileSource === "uploaded"
+          ? getPreviewUrl(selectedKind, r.filename)
+          : undefined;
+      
+      return {
+        ...r,
+        label,
+        birads,
+        localUrl,
+        uploadedFileUrl,
+      };
     });
-  }, [results, previews, fileSource]);
-
-  const translateLabel = (label: string) => {
-    const lower = label.toLowerCase();
-    if (lower === "benign") return "Bénin";
-    if (lower === "malignant") return "Malin";
-    if (lower === "normal") return "Normal";
-    return label;
-  };
+  }, [results, previews, fileSource, selectedKind]);
 
   const openPicker = () => inputRef.current?.click();
 
@@ -208,7 +232,6 @@ export default function Page() {
       <h1 className="text-2xl font-semibold">Inférence</h1>
 
       <form onSubmit={run} className="rounded-xl border p-6 space-y-4">
-        {/* Source des fichiers */}
         <div>
           <label className="text-sm text-muted-foreground">Source des fichiers</label>
           <div className="mt-2 flex gap-4">
@@ -252,7 +275,6 @@ export default function Page() {
               onChange={(e) => {
                 setMode(e.target.value as any);
                 if (e.target.value === "single") {
-                  // Réinitialiser la sélection en mode single
                   setSelectedUploaded({});
                 }
               }}
@@ -264,50 +286,61 @@ export default function Page() {
             </select>
           </div>
 
-          {fileSource === "uploaded" && (
-            <div>
-              <label className="text-sm text-muted-foreground">Type de fichiers</label>
-              <select
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                value={selectedKind}
-                onChange={(e) => {
-                  setSelectedKind(e.target.value as "dicom" | "pgm");
-                  setSelectedUploaded({});
-                }}
-                disabled={isRunning}
-              >
-                <option value="dicom">DICOM</option>
-                <option value="pgm">PGM</option>
-              </select>
-            </div>
-          )}
-
-          {fileSource === "computer" && (
-            <div className="flex flex-col">
-              <label className="text-sm text-muted-foreground">Choisir les fichiers</label>
-              <div className="mt-1 flex items-center gap-3">
-                <input
-                  ref={inputRef}
-                  type="file"
-                  multiple={mode !== "single"}
-                  onChange={onLocalFiles}
-                  accept=".png,.jpg,.jpeg,.gif,.webp,.bmp,.pgm,.dcm"
-                  className="hidden"
-                  disabled={isRunning}
-                />
-                <Button type="button" variant="outline" onClick={openPicker} disabled={isRunning}>
-                  Parcourir…
-                </Button>
-                <span className="text-sm text-muted-foreground truncate">{fileHelperText}</span>
-              </div>
-              <span className="mt-1 text-xs text-muted-foreground">
-                Formats acceptés : PNG, JPG, JPEG, GIF, WEBP, BMP, PGM, DCM
-              </span>
-            </div>
-          )}
+          <div>
+            <label className="text-sm text-muted-foreground">ID Patient (optionnel)</label>
+            <input
+              type="number"
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              placeholder="Ex: 12345"
+              value={patientId}
+              onChange={(e) => setPatientId(e.target.value)}
+              disabled={isRunning}
+            />
+          </div>
         </div>
 
-        {/* Liste des fichiers uploadés */}
+        {fileSource === "uploaded" && (
+          <div>
+            <label className="text-sm text-muted-foreground">Type de fichiers</label>
+            <select
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              value={selectedKind}
+              onChange={(e) => {
+                setSelectedKind(e.target.value as "dicom" | "pgm");
+                setSelectedUploaded({});
+              }}
+              disabled={isRunning}
+            >
+              <option value="dicom">DICOM</option>
+              <option value="pgm">PGM</option>
+            </select>
+          </div>
+        )}
+
+        {fileSource === "computer" && (
+          <div className="flex flex-col">
+            <label className="text-sm text-muted-foreground">Choisir les fichiers</label>
+            <div className="mt-1 flex items-center gap-3">
+              <input
+                ref={inputRef}
+                type="file"
+                multiple={mode !== "single"}
+                onChange={onLocalFiles}
+                accept=".png,.jpg,.jpeg,.gif,.webp,.bmp,.pgm,.dcm"
+                className="hidden"
+                disabled={isRunning}
+              />
+              <Button type="button" variant="outline" onClick={openPicker} disabled={isRunning}>
+                Parcourir…
+              </Button>
+              <span className="text-sm text-muted-foreground truncate">{fileHelperText}</span>
+            </div>
+            <span className="mt-1 text-xs text-muted-foreground">
+              Formats acceptés : PNG, JPG, JPEG, GIF, WEBP, BMP, PGM, DCM
+            </span>
+          </div>
+        )}
+
         {fileSource === "uploaded" && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -339,14 +372,15 @@ export default function Page() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   {uploadedFiles.map((file) => {
-                    const previewUrl = getPreviewUrl(selectedKind, file.filename); // ← PNG généré côté API
+                    const previewUrl = getPreviewUrl(selectedKind, file.filename);
                     const checked = !!selectedUploaded[file.filename];
 
                     return (
                       <label
                         key={file.filename}
-                        className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${checked ? "bg-blue-50 border-blue-500" : "hover:bg-gray-50"
-                          }`}
+                        className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                          checked ? "bg-blue-50 border-blue-500" : "hover:bg-gray-50"
+                        }`}
                       >
                         <input
                           type={mode === "single" ? "radio" : "checkbox"}
@@ -356,7 +390,6 @@ export default function Page() {
                           className="mt-1"
                         />
 
-                        {/* vignette */}
                         <div className="shrink-0">
                           <ImagePreview
                             kind={selectedKind}
@@ -368,7 +401,6 @@ export default function Page() {
                           />
                         </div>
 
-                        {/* méta */}
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium truncate">{file.filename}</div>
                           <div className="text-xs text-muted-foreground">
@@ -378,7 +410,6 @@ export default function Page() {
                       </label>
                     );
                   })}
-
                 </div>
               )}
             </div>
@@ -397,28 +428,28 @@ export default function Page() {
 
       {results && (
         <div className="rounded-xl border p-6 space-y-4">
-          <div className="text-sm text-muted-foreground">Résultats</div>
+          <div className="text-sm text-muted-foreground">Résultats ({results.length})</div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {paired.map((r, idx) => (
               <div key={`${r.filename}-${idx}`} className="rounded-lg border p-4 space-y-3">
-                {r.serverUrl ? (
-                  <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md bg-muted">
-                    <Image
-                      src={r.serverUrl}
-                      alt={r.filename}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                      unoptimized
-                    />
-                  </div>
-                ) : r.localUrl ? (
+                {r.localUrl ? (
                   <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md bg-muted">
                     <Image
                       src={r.localUrl}
                       alt={r.filename}
                       fill
-                      className="object-cover"
+                      className="object-contain"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      unoptimized
+                    />
+                  </div>
+                ) : r.uploadedFileUrl ? (
+                  <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md bg-muted">
+                    <Image
+                      src={r.uploadedFileUrl}
+                      alt={r.filename}
+                      fill
+                      className="object-contain"
                       sizes="(max-width: 768px) 100vw, 33vw"
                       unoptimized
                     />
@@ -432,8 +463,18 @@ export default function Page() {
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground truncate">{r.filename}</div>
                   <div className="text-lg font-semibold">{translateLabel(r.label)}</div>
-                  <div className="text-sm">BI-RADS : {r.birads}</div>
-                  <div className="text-sm">Confiance : {(r.confidence * 100).toFixed(1)}%</div>
+                  <div className="text-sm">{r.birads}</div>
+                  {r.confidence !== null && (
+                    <div className="text-sm">Confiance : {(r.confidence * 100).toFixed(1)}%</div>
+                  )}
+                  <div className="text-xs text-muted-foreground">
+                    Statut : {r.status}
+                  </div>
+                  {r.patient_id && (
+                    <div className="text-xs text-muted-foreground">
+                      Patient ID : {r.patient_id}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

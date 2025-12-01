@@ -1,32 +1,27 @@
-// src/store/resultsStore.ts
-import { create } from "zustand"
-import type { ResultItem } from "@/types/results"
+// store/resultsStore.ts
+import { create } from "zustand";
+import type { ResultItem } from "@/types/imageInference";
 
-type State = {
-  loading: boolean
-  downloading: boolean
-  progressPct: number
-  items: ResultItem[]
-  total: number
+interface ResultsState {
+  items: ResultItem[];
+  total: number;
+  loading: boolean;
+  downloading: boolean;
+  progressPct: number;
+  setLoading: (loading: boolean) => void;
+  setData: (items: ResultItem[], total: number) => void;
+  setDownloading: (downloading: boolean) => void;
+  setProgressPct: (pct: number) => void;
 }
 
-type Actions = {
-  setLoading: (b: boolean) => void
-  setDownloading: (b: boolean) => void
-  setProgressPct: (n: number) => void
-  setData: (items: ResultItem[], total: number) => void
-  reset: () => void
-}
-
-export const useResultsStore = create<State & Actions>((set) => ({
+export const useResultsStore = create<ResultsState>((set) => ({
+  items: [],
+  total: 0,
   loading: false,
   downloading: false,
   progressPct: 0,
-  items: [],
-  total: 0,
-  setLoading: (b) => set({ loading: b }),
-  setDownloading: (b) => set({ downloading: b }),
-  setProgressPct: (n) => set({ progressPct: Math.max(0, Math.min(100, n)) }),
+  setLoading: (loading) => set({ loading }),
   setData: (items, total) => set({ items, total }),
-  reset: () => set({ loading: false, downloading: false, progressPct: 0, items: [], total: 0 }),
-}))
+  setDownloading: (downloading) => set({ downloading }),
+  setProgressPct: (progressPct) => set({ progressPct }),
+}));

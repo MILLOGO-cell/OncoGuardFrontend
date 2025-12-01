@@ -1,27 +1,39 @@
 // lib/api/imageInferenceApi.ts
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/+$/, "");
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+).replace(/\/+$/, "");
 
-export interface InferenceResponse {
-  label: string;
-  birads: string;
-  confidence: number;
-  filename: string;
-  tagged_filename?: string | null;
+import type {
+  InferenceResponse,
+  ProgressCallbacks,
+  ModelInfoResponse,
+  PredictPayload,
+} from "@/types/imageInference";
+
+export async function getModelInfo(): Promise<ModelInfoResponse> {
+  const url = `${API_BASE}/image-inference/model-info`;
+  const response = await fetch(url, { method: "GET" });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `Failed to fetch model info: ${response.status} ${response.statusText} ${text}`
+    );
+  }
+  return await response.json();
 }
-
-type ProgressCallbacks = {
-  onUploadPct?: (pct: number) => void;
-  onProcessPct?: (pct: number) => void;
-};
 
 export async function predict(
   file: File,
+  payload?: PredictPayload,
   callbacks?: ProgressCallbacks
 ): Promise<InferenceResponse> {
   const formData = new FormData();
   formData.append("file", file);
+  if (payload?.patient_id) {
+    formData.append("patient_id", payload.patient_id.toString());
+  }
 
-  const url = `${API_BASE}/image-inference/predict`;
+  const url = `${API_BASE}/image-analysis/predict`;
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -32,25 +44,6 @@ export async function predict(
         callbacks.onUploadPct(pct);
       }
     });
-
-    xhr.addEventListener("load", () => {
-      try {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          callbacks?.onProcessPct?.(100);
-          resolve(JSON.parse(xhr.responseText));
-        } else {
-          reject(new Error(`Prediction failed: ${xhr.status} ${xhr.statusText}`));
-        }
-      } catch (err) {
-        reject(err);
-      }
-    });
-
-    xhr.addEventListener("error", () => reject(new Error("Prediction failed")));
-    xhr.addEventListener("abort", () => reject(new Error("Prediction aborted")));
-
-    xhr.open("POST", url);
-    xhr.send(formData);
 
     xhr.upload.addEventListener("loadend", () => {
       if (callbacks?.onProcessPct) {
@@ -65,18 +58,53 @@ export async function predict(
         }, 100);
       }
     });
+
+    xhr.addEventListener("load", () => {
+      try {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          callbacks?.onProcessPct?.(100);
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          reject(
+            new Error(
+              `Prediction failed: ${xhr.status} ${xhr.statusText}`
+            )
+          );
+        }
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    xhr.addEventListener("error", () =>
+      reject(new Error("Network error during prediction"))
+    );
+    xhr.addEventListener("abort", () =>
+      reject(new Error("Prediction aborted"))
+    );
+
+    xhr.timeout = 300000;
+    xhr.addEventListener("timeout", () =>
+      reject(new Error("Prediction timeout (5min)"))
+    );
+
+    xhr.open("POST", url);
+    xhr.send(formData);
   });
 }
 
 export async function predictBatch(
   files: File[],
-  _returnAnnotated: boolean = true,
+  payload?: PredictPayload,
   callbacks?: ProgressCallbacks
 ): Promise<InferenceResponse[]> {
   const formData = new FormData();
   files.forEach((file) => formData.append("files", file));
+  if (payload?.patient_id) {
+    formData.append("patient_id", payload.patient_id.toString());
+  }
 
-  const url = `${API_BASE}/image-inference/predict-batch`;
+  const url = `${API_BASE}/image-analysis/predict-batch`;
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -88,21 +116,48 @@ export async function predictBatch(
       }
     });
 
+    xhr.upload.addEventListener("loadend", () => {
+      if (callbacks?.onProcessPct) {
+        let pct = 0;
+        const interval = setInterval(() => {
+          pct += 5;
+          if (pct >= 90) {
+            clearInterval(interval);
+          } else {
+            callbacks.onProcessPct?.(pct);
+          }
+        }, 200);
+      }
+    });
+
     xhr.addEventListener("load", () => {
       try {
         if (xhr.status >= 200 && xhr.status < 300) {
           callbacks?.onProcessPct?.(100);
           resolve(JSON.parse(xhr.responseText));
         } else {
-          reject(new Error(`Batch prediction failed: ${xhr.status} ${xhr.statusText}`));
+          reject(
+            new Error(
+              `Batch prediction failed: ${xhr.status} ${xhr.statusText}`
+            )
+          );
         }
       } catch (err) {
         reject(err);
       }
     });
 
-    xhr.addEventListener("error", () => reject(new Error("Batch prediction failed")));
-    xhr.addEventListener("abort", () => reject(new Error("Batch prediction aborted")));
+    xhr.addEventListener("error", () =>
+      reject(new Error("Network error during batch prediction"))
+    );
+    xhr.addEventListener("abort", () =>
+      reject(new Error("Batch prediction aborted"))
+    );
+
+    xhr.timeout = 600000;
+    xhr.addEventListener("timeout", () =>
+      reject(new Error("Batch prediction timeout (10min)"))
+    );
 
     xhr.open("POST", url);
     xhr.send(formData);
@@ -128,12 +183,15 @@ export async function predictFromServer(
     callbacks?.onProcessPct?.(50);
 
     if (!response.ok) {
-      const txt = await response.text().catch(() => "");
-      throw new Error(`Server prediction failed: ${response.status} ${response.statusText} ${txt}`);
+      const text = await response.text().catch(() => "");
+      throw new Error(
+        `Server prediction failed: ${response.status} ${response.statusText} ${text}`
+      );
     }
 
     const results = (await response.json()) as InferenceResponse[];
     callbacks?.onProcessPct?.(100);
+
     return results;
   } catch (error) {
     callbacks?.onProcessPct?.(0);
