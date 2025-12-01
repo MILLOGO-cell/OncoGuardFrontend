@@ -3,47 +3,47 @@ import { useCallback } from "react";
 import {
   predict,
   predictBatch,
-  InferenceResponse,
   predictFromServer,
+  getModelInfo,
 } from "@/lib/api/imageInferenceApi";
-
-type ProgressCallbacks = {
-  onUploadPct?: (pct: number) => void;
-  onProcessPct?: (pct: number) => void;
-};
+import type {
+  InferenceResponse,
+  ModelInfoResponse,
+  ProgressCallbacks,
+  PredictPayload,
+} from "@/types/imageInference";
 
 export function useImageInference() {
-  /**
-   * Prédiction d'un seul fichier (depuis l'ordinateur)
-   */
+  const fetchModelInfo = useCallback(async (): Promise<ModelInfoResponse> => {
+    return getModelInfo();
+  }, []);
+
   const predictOne = useCallback(
-    async (file: File, callbacks?: ProgressCallbacks): Promise<InferenceResponse> => {
-      return predict(file, callbacks);
+    async (
+      file: File,
+      payload?: PredictPayload,
+      callbacks?: ProgressCallbacks
+    ): Promise<InferenceResponse> => {
+      return predict(file, payload, callbacks);
     },
     []
   );
 
-  /**
-   * Prédiction batch de plusieurs fichiers (depuis l'ordinateur)
-   */
   const predictManyBatch = useCallback(
     async (
       files: File[],
-      returnAnnotated: boolean = true,
+      payload?: PredictPayload,
       callbacks?: ProgressCallbacks
     ): Promise<InferenceResponse[]> => {
-      return predictBatch(files, returnAnnotated, callbacks);
+      return predictBatch(files, payload, callbacks);
     },
     []
   );
 
-  /**
-   * Prédiction séquentielle de plusieurs fichiers (depuis l'ordinateur)
-   */
   const predictManySequential = useCallback(
     async (
       files: File[],
-      returnAnnotated: boolean = true,
+      payload?: PredictPayload,
       callbacks?: ProgressCallbacks
     ): Promise<InferenceResponse[]> => {
       const results: InferenceResponse[] = [];
@@ -51,28 +51,33 @@ export function useImageInference() {
 
       for (let i = 0; i < total; i++) {
         const file = files[i];
-        
-        // Upload progress pour ce fichier
+
+        const fileStartPct = (i / total) * 100;
+        const fileEndPct = ((i + 1) / total) * 100;
+        const fileRangePct = fileEndPct - fileStartPct;
+
         const onUpload = (pct: number) => {
-          const globalPct = ((i + pct / 100) / total) * 100;
+          const globalPct = fileStartPct + (pct / 100) * (fileRangePct * 0.5);
           callbacks?.onUploadPct?.(globalPct);
         };
 
-        // Process progress pour ce fichier
         const onProcess = (pct: number) => {
-          const globalPct = ((i + pct / 100) / total) * 100;
+          const globalPct =
+            fileStartPct + fileRangePct * 0.5 + (pct / 100) * (fileRangePct * 0.5);
           callbacks?.onProcessPct?.(globalPct);
         };
 
-        const result = await predict(file, {
-          onUploadPct: onUpload,
-          onProcessPct: onProcess,
-        });
-
-        results.push(result);
+        try {
+          const result = await predict(file, payload, {
+            onUploadPct: onUpload,
+            onProcessPct: onProcess,
+          });
+          results.push(result);
+        } catch (error) {
+          console.error(`Erreur prédiction fichier ${i + 1}/${total}:`, error);
+        }
       }
 
-      // Compléter les barres de progression
       callbacks?.onUploadPct?.(100);
       callbacks?.onProcessPct?.(100);
 
@@ -81,9 +86,6 @@ export function useImageInference() {
     []
   );
 
-  /**
-   * Prédiction depuis des fichiers déjà uploadés sur le serveur
-   */
   const predictFromUploadedFiles = useCallback(
     async (
       kind: "dicom" | "pgm",
@@ -96,6 +98,7 @@ export function useImageInference() {
   );
 
   return {
+    fetchModelInfo,
     predictOne,
     predictManyBatch,
     predictManySequential,
