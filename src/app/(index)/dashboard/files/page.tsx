@@ -34,7 +34,7 @@ export default function FilesPage() {
   const { fetchList, removeFile, downloadAllZip, downloadSelectedZip } = useFiles();
   const { items, downloading, progressPct, loading } = useFilesStore();
 
-  const [kind, setKind] = useState<FileKind>("dicom");
+  const [kind, setKind] = useState<FileKind>("tagged");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(1);
 
@@ -125,6 +125,16 @@ export default function FilesPage() {
 
   const isDisabled = loading || downloading;
 
+  const getKindLabel = (k: FileKind): string => {
+    if (k === "dicom") return "DICOM";
+    if (k === "pgm") return "PGM";
+    if (k === "png") return "PNG";
+    if (k === "tagged") return "Annotées";
+
+    const _exhaustiveCheck: never = k;
+    return _exhaustiveCheck;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -133,7 +143,7 @@ export default function FilesPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Gestion des fichiers</h1>
           <p className="mt-2 text-gray-600">
-            Visualisez et téléchargez vos fichiers DICOM, PGM et PNG
+            Visualisez et téléchargez vos fichiers DICOM, PGM, PNG et images annotées
           </p>
         </div>
 
@@ -153,9 +163,10 @@ export default function FilesPage() {
                 onChange={(e) => handleKindChange(e.target.value as FileKind)}
                 disabled={isDisabled}
               >
-                <option value="dicom">DICOM</option>
-                <option value="pgm">PGM</option>
-                <option value="png">PNG</option>
+                <option value="tagged">Images annotées (après inférence)</option>
+                <option value="dicom">DICOM (originaux)</option>
+                <option value="pgm">PGM (sources)</option>
+                <option value="png">PNG (sources)</option>
               </select>
             </div>
 
@@ -246,10 +257,12 @@ export default function FilesPage() {
                 />
               </svg>
               <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                Aucun fichier {kind === "dicom" ? "DICOM" : kind === "pgm" ? "PGM" : "PNG"}
+                Aucun fichier {getKindLabel(kind)}
               </h3>
               <p className="text-gray-500">
-                Les fichiers apparaîtront ici une fois importés depuis la page Ingest
+                {kind === "tagged"
+                  ? "Les images annotées apparaîtront ici après analyse depuis la page Inférence"
+                  : "Les fichiers apparaîtront ici une fois importés depuis la page Ingest"}
               </p>
             </div>
           </div>

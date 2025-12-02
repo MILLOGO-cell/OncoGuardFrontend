@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 
 interface ImagePreviewProps {
-  kind: "dicom" | "pgm" | "png";
+  kind: "dicom" | "pgm" | "png" | "tagged";
   filename: string;
   previewUrl: string;
   className?: string;
@@ -30,7 +30,7 @@ export default function ImagePreview({
       <div className={`grid place-items-center bg-muted rounded ${className}`}>
         <div className="text-center space-y-2 p-4">
           <div className="text-xs text-muted-foreground">
-            {kind === "dicom" ? "DICOM" : kind === "pgm" ? "PGM" : "PNG"}
+            {kind === "dicom" ? "DICOM" : kind === "pgm" ? "PGM" : kind === "tagged" ? "Annotée" : "PNG"}
           </div>
           <div className="text-xs text-red-500">Aperçu indisponible</div>
         </div>
