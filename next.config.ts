@@ -1,10 +1,8 @@
-// next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["recharts"], 
   images: {
-    // Prend en charge le port (mieux que `domains`)
     remotePatterns: [
       {
         protocol: "http",
@@ -16,6 +14,11 @@ const nextConfig: NextConfig = {
         protocol: "http",
         hostname: "localhost",
         port: "8000",
+        pathname: "/api/v1/**",
+      },
+      {
+        protocol: "https",
+        hostname: "vcgckw80k8gc0c88osk0kk4w.37.27.42.12.sslip.io",
         pathname: "/api/v1/**",
       },
     ],
