@@ -19,7 +19,6 @@ export default function ImagePreview({
   previewUrl,
   className = "",
   fit = "cover",
-  unoptimized,
   blurDataURL,
 }: ImagePreviewProps) {
   const [error, setError] = useState(false);
@@ -54,7 +53,7 @@ export default function ImagePreview({
         sizes="100vw"
         placeholder={blurDataURL ? "blur" : "empty"}
         blurDataURL={blurDataURL}
-        unoptimized={unoptimized}
+        unoptimized
         onLoadingComplete={() => setLoading(false)}
         onError={() => {
           setError(true);

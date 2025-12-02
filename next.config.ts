@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "vcgckw80k8gc0c88osk0kk4w.37.27.42.12.sslip.io",
+        hostname: "**.sslip.io",
         pathname: "/api/v1/**",
       },
     ],
