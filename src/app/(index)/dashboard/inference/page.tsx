@@ -25,9 +25,16 @@ function ProgressBar({ value, label }: { value: number; label: string }) {
 }
 
 const IMAGE_EXT = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
+const MEDICAL_EXT = ["dcm", "pgm"];
+
 function isPreviewable(name: string, type?: string) {
   const ext = name.split(".").pop()?.toLowerCase() || "";
   return type?.startsWith("image/") || IMAGE_EXT.includes(ext);
+}
+
+function isMedicalImage(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  return MEDICAL_EXT.includes(ext);
 }
 
 function extractBiradsInfo(resultClass: string | null) {
@@ -41,6 +48,12 @@ function extractBiradsInfo(resultClass: string | null) {
     label: description,
     birads: `BI-RADS ${biradsCode}`,
   };
+}
+
+function extractTaggedFilename(description: string | null | undefined): string | null {
+  if (!description) return null;
+  const match = description.match(/Tagged:\s*([^\s|]+)/);
+  return match ? match[1] : null;
 }
 
 function translateLabel(label: string) {
@@ -65,6 +78,8 @@ function getBiradsColor(birads: string) {
   if (birads.includes("5") || birads.includes("6")) return "bg-red-100 text-red-700 border-red-300";
   return "bg-gray-100 text-gray-700 border-gray-300";
 }
+
+const API_BASE = "https://vcgckw80k8gc0c88osk0kk4w.37.27.42.12.sslip.io/api/v1";
 
 export default function Page() {
   const { predictOne, predictManySequential } = useImageInference();
@@ -145,16 +160,25 @@ export default function Page() {
     if (!results) return [];
     return results.map((r, idx) => {
       const { label, birads } = extractBiradsInfo(r.result_class);
-      const localUrl = previews.get(idx);
+      const taggedFilename = extractTaggedFilename(r.description);
+      const originalFile = localFiles[idx];
+      
+      let displayUrl: string | null = null;
+      
+      if (taggedFilename) {
+        displayUrl = `${API_BASE}/image-analysis/tagged/${taggedFilename}`;
+      } else if (originalFile && !isMedicalImage(originalFile.name)) {
+        displayUrl = previews.get(idx) || null;
+      }
       
       return {
         ...r,
         label,
         birads,
-        localUrl,
+        displayUrl,
       };
     });
-  }, [results, previews]);
+  }, [results, previews, localFiles]);
 
   const openPicker = () => inputRef.current?.click();
 
@@ -322,10 +346,10 @@ export default function Page() {
                   key={`${r.filename}-${idx}`} 
                   className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow"
                 >
-                  {r.localUrl ? (
+                  {r.displayUrl ? (
                     <div className="relative aspect-[4/3] w-full bg-gray-100">
                       <Image
-                        src={r.localUrl}
+                        src={r.displayUrl}
                         alt={r.filename}
                         fill
                         className="object-contain"
