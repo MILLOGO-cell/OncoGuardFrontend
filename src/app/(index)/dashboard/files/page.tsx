@@ -1,3 +1,5 @@
+// app/(dashboard)/files/page.tsx
+
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -63,9 +65,8 @@ export default function FilesPage() {
   const canNext = page < totalPages;
 
   const getPreviewUrl = useCallback((fileKind: FileKind, filename: string) => {
-    return `${API_BASE}/ingest/download/${fileKind}/${encodeURIComponent(
-      filename
-    )}`;
+    // ✅ Utiliser /preview au lieu de /download pour conversion automatique
+    return `${API_BASE}/ingest/preview/${fileKind}/${encodeURIComponent(filename)}`;
   }, []);
 
   const toggleSelection = useCallback((name: string) => {
@@ -251,8 +252,7 @@ export default function FilesPage() {
                 Aucun fichier {kind === "dicom" ? "DICOM" : "PGM"}
               </h3>
               <p className="text-gray-500">
-                Les fichiers apparaîtront ici une fois importés depuis la page
-                Ingest
+                Les fichiers apparaîtront ici une fois importés depuis la page Ingest
               </p>
             </div>
           </div>
