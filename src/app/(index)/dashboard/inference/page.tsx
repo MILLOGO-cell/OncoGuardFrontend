@@ -51,9 +51,19 @@ function extractBiradsInfo(resultClass: string | null) {
 }
 
 function extractTaggedFilename(description: string | null | undefined): string | null {
-  if (!description) return null;
+  if (!description) {
+    console.log("extractTaggedFilename: description is null/undefined");
+    return null;
+  }
+  
   const match = description.match(/Tagged:\s*([^\s|]+)/);
-  return match ? match[1] : null;
+  if (match && match[1]) {
+    console.log("extractTaggedFilename: found", match[1]);
+    return match[1];
+  }
+  
+  console.log("extractTaggedFilename: no match in", description);
+  return null;
 }
 
 function translateLabel(label: string) {
@@ -141,12 +151,14 @@ export default function Page() {
           onUploadPct: setUploadPct,
           onProcessPct: setProcessPct,
         });
+        console.log("Single prediction result:", r);
         setResults([r]);
       } else if (mode === "sequential") {
         const rr = await predictManySequential(localFiles, undefined, {
           onUploadPct: setUploadPct,
           onProcessPct: setProcessPct,
         });
+        console.log("Batch prediction results:", rr);
         setResults(rr);
       }
     } catch (error) {
@@ -158,6 +170,7 @@ export default function Page() {
 
   const paired = useMemo(() => {
     if (!results) return [];
+    
     return results.map((r, idx) => {
       const { label, birads } = extractBiradsInfo(r.result_class);
       const taggedFilename = extractTaggedFilename(r.description);
@@ -167,8 +180,17 @@ export default function Page() {
       
       if (taggedFilename) {
         displayUrl = `${API_BASE}/image-analysis/tagged/${taggedFilename}`;
+        console.log(`Result ${idx}: Using tagged image URL:`, displayUrl);
       } else if (originalFile && !isMedicalImage(originalFile.name)) {
         displayUrl = previews.get(idx) || null;
+        console.log(`Result ${idx}: Using local preview:`, displayUrl);
+      } else {
+        console.log(`Result ${idx}: No displayUrl available`, {
+          hasTagged: !!taggedFilename,
+          hasOriginal: !!originalFile,
+          isMedical: originalFile ? isMedicalImage(originalFile.name) : 'no file',
+          description: r.description
+        });
       }
       
       return {
@@ -176,6 +198,7 @@ export default function Page() {
         label,
         birads,
         displayUrl,
+        taggedFilename,
       };
     });
   }, [results, previews, localFiles]);
@@ -355,11 +378,27 @@ export default function Page() {
                         className="object-contain"
                         sizes="(max-width: 768px) 100vw, 33vw"
                         unoptimized
+                        onError={(e) => {
+                          console.error(`Image load error for ${r.filename}:`, r.displayUrl);
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
                     </div>
                   ) : (
                     <div className="aspect-[4/3] w-full bg-gray-100 flex items-center justify-center">
-                      <span className="text-xs text-gray-400">Aperçu indisponible</span>
+                      <div className="text-center p-4">
+                        <span className="text-xs text-gray-400 block">Aperçu indisponible</span>
+                        {r.taggedFilename && (
+                          <a 
+                            href={`${API_BASE}/image-analysis/tagged/${r.taggedFilename}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline mt-2 block"
+                          >
+                            Ouvrir l'image
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
 
