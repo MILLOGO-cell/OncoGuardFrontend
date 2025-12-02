@@ -1,5 +1,3 @@
-// app/(dashboard)/files/page.tsx
-
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -34,7 +32,6 @@ function ProgressBar({ value, label }: { value: number; label: string }) {
 
 export default function FilesPage() {
   const { fetchList, removeFile, downloadAllZip, downloadSelectedZip } = useFiles();
-
   const { items, downloading, progressPct, loading } = useFilesStore();
 
   const [kind, setKind] = useState<FileKind>("dicom");
@@ -65,7 +62,6 @@ export default function FilesPage() {
   const canNext = page < totalPages;
 
   const getPreviewUrl = useCallback((fileKind: FileKind, filename: string) => {
-    // ✅ Utiliser /preview au lieu de /download pour conversion automatique
     return `${API_BASE}/ingest/preview/${fileKind}/${encodeURIComponent(filename)}`;
   }, []);
 
@@ -137,7 +133,7 @@ export default function FilesPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Gestion des fichiers</h1>
           <p className="mt-2 text-gray-600">
-            Visualisez et téléchargez vos fichiers DICOM et PGM
+            Visualisez et téléchargez vos fichiers DICOM, PGM et PNG
           </p>
         </div>
 
@@ -159,6 +155,7 @@ export default function FilesPage() {
               >
                 <option value="dicom">DICOM</option>
                 <option value="pgm">PGM</option>
+                <option value="png">PNG</option>
               </select>
             </div>
 
@@ -249,7 +246,7 @@ export default function FilesPage() {
                 />
               </svg>
               <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                Aucun fichier {kind === "dicom" ? "DICOM" : "PGM"}
+                Aucun fichier {kind === "dicom" ? "DICOM" : kind === "pgm" ? "PGM" : "PNG"}
               </h3>
               <p className="text-gray-500">
                 Les fichiers apparaîtront ici une fois importés depuis la page Ingest

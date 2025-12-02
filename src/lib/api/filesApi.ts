@@ -2,10 +2,14 @@ import { FileItem } from "@/types/files";
 
 const API_BASE = "https://vcgckw80k8gc0c88osk0kk4w.37.27.42.12.sslip.io/api/v1";
 
-export type FileKind = "dicom" | "pgm";
+export type FileKind = "dicom" | "pgm" | "png";
 
 export function downloadFileUrl(kind: FileKind, filename: string): string {
-  return `${API_BASE}/ingest/download/${kind}/${filename}`;
+  return `${API_BASE}/ingest/download/${kind}/${encodeURIComponent(filename)}`;
+}
+
+export function getPreviewUrl(kind: FileKind, filename: string): string {
+  return `${API_BASE}/ingest/preview/${kind}/${encodeURIComponent(filename)}`;
 }
 
 export async function fetchFileList(params: {
