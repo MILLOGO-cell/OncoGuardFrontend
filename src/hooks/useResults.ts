@@ -6,6 +6,7 @@ import {
   listResults,
   downloadReportCsv,
   downloadTaggedZip,
+  deleteResultsBatch,
 } from "@/lib/api/resultsApi";
 import type { ResultsResponse } from "@/types/imageInference";
 
@@ -21,7 +22,7 @@ function saveBlob(data: Blob, filename: string): void {
 }
 
 export function useResults() {
-  const { setLoading, setData, setDownloading, setProgressPct } =
+  const { setLoading, setData, setDownloading, setProgressPct, removeItems } =
     useResultsStore();
 
   const fetchAll = useCallback(
@@ -33,6 +34,7 @@ export function useResults() {
         setLoading(true);
         const res = await listResults(params);
         setData(res.items, res.total);
+        toast.success(`${res.total} résultats chargés`);
         return res;
       } catch (e: any) {
         const message =
@@ -44,6 +46,35 @@ export function useResults() {
       }
     },
     [setLoading, setData]
+  );
+
+  const deleteSelected = useCallback(
+    async (
+      items: Array<{ id: number; tagged_filename: string | null }>
+    ): Promise<void> => {
+      try {
+        setLoading(true);
+        const result = await deleteResultsBatch(items);
+        
+        removeItems(items.map((item) => item.id));
+        
+        if (result.failed.length > 0) {
+          toast.warning(
+            `${result.total_deleted} supprimés, ${result.failed.length} échecs`
+          );
+        } else {
+          toast.success(`${result.total_deleted} fichiers supprimés`);
+        }
+      } catch (e: any) {
+        const message =
+          e?.response?.data?.detail || "Échec de la suppression";
+        toast.error(message);
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setLoading, removeItems]
   );
 
   const exportCsv = useCallback(async (): Promise<void> => {
@@ -87,6 +118,7 @@ export function useResults() {
 
   return {
     fetchAll,
+    deleteSelected,
     exportCsv,
     exportTaggedZip,
   };

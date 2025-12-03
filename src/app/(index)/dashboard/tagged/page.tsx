@@ -69,14 +69,11 @@ function ImageModal({
       >
         <div className="flex items-center justify-between p-4 border-b">
           <div className="min-w-0">
-            <h2 id="image-dialog-title" className="text-lg font-semibold truncate">{item.filename}</h2>
+            <h2 className="text-lg font-semibold truncate">{item.filename}</h2>
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mt-1">
               <span className="font-medium">{item.label || "Non classifiée"}</span>
               {item.birads ? <span>BI-RADS {item.birads}</span> : null}
               {(item.confidence ?? 0) > 0 ? <span>Confiance {((item.confidence ?? 0) * 100).toFixed(1)}%</span> : null}
-              <span className={item.tagged_filename ? "px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : "px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"}>
-                {item.tagged_filename ? "Annotée" : "À annoter"}
-              </span>
             </div>
           </div>
           <button onClick={onClose} className="ml-4 p-2 rounded-lg hover:bg-muted transition-colors" aria-label="Fermer">
@@ -105,14 +102,10 @@ function ImageModal({
         </div>
 
         <div className="flex items-center justify-between p-4 border-t bg-muted/20">
-          <div id="image-dialog-desc" className="text-sm text-muted-foreground">Flèches ← → pour naviguer • Échap pour fermer</div>
-          {imgSrc ? (
+          <div className="text-sm text-muted-foreground">Flèches ← → pour naviguer • Échap pour fermer</div>
+          {imgSrc && (
             <Button asChild variant="link">
-              <Link href={imgSrc} download>{`Télécharger l’annotation`}</Link>
-            </Button>
-          ) : (
-            <Button asChild variant="link">
-              <Link href={downloadFileUrl("dicom", item.filename)}>{`Télécharger le DICOM`}</Link>
+              <Link href={imgSrc} download>Télécharger l'annotation</Link>
             </Button>
           )}
         </div>
@@ -122,8 +115,8 @@ function ImageModal({
 }
 
 export default function Page() {
-  const { fetchAll, exportCsv, exportTaggedZip } = useResults();
-  const { items, loading, downloading, progressPct } = useResultsStore();
+  const { fetchAll, exportCsv, exportTaggedZip, deleteSelected } = useResults();
+  const { items, loading, downloading, progressPct, selectedIds, toggleSelection, selectAll, clearSelection } = useResultsStore();
 
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [limit, setLimit] = useState<number>(24);
@@ -167,33 +160,67 @@ export default function Page() {
   const prevModal = () => setSelectedIndex((i) => (i !== null && i > 0 ? i - 1 : i));
   const nextModal = () => setSelectedIndex((i) => (i !== null && i < sorted.length - 1 ? i + 1 : i));
 
+  const handleSelectAll = () => {
+    if (selectedIds.size === current.length) {
+      clearSelection();
+    } else {
+      selectAll(current.map((it) => Number(it.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Supprimer ${selectedIds.size} fichier(s) ?`)) return;
+
+    const toDelete = items.filter((item) => selectedIds.has(Number(item.id)));
+    await deleteSelected(
+      toDelete.map((item) => ({
+        id: Number(item.id),
+        tagged_filename: item.tagged_filename || null,
+      }))
+    );
+  };
+
+  const allCurrentSelected = current.length > 0 && current.every((it) => selectedIds.has(Number(it.id)));
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Résultats d’annotation</h1>
+          <h1 className="text-2xl font-semibold">Résultats d'annotation</h1>
           <p className="text-sm text-muted-foreground">
             {filtered.filter((i: ResultItem) => !!i.tagged_filename).length} annotées • {filtered.filter((i: ResultItem) => !i.tagged_filename).length} non annotées • total {total}
+            {selectedIds.size > 0 && <span className="ml-2 font-medium text-primary">• {selectedIds.size} sélectionnés</span>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select className="border rounded-md px-3 py-2 text-sm" value={view} onChange={(e) => setView(e.target.value as ViewFilter)} disabled={loading || downloading} aria-label="Filtrer l’état">
+          {selectedIds.size > 0 && (
+            <>
+              <Button variant="danger" onClick={handleDeleteSelected} disabled={loading || downloading}>
+                Supprimer ({selectedIds.size})
+              </Button>
+              <Button variant="secondary" onClick={clearSelection} disabled={loading || downloading}>
+                Désélectionner
+              </Button>
+            </>
+          )}
+          <select className="border rounded-md px-3 py-2 text-sm" value={view} onChange={(e) => setView(e.target.value as ViewFilter)} disabled={loading || downloading}>
             <option value="all">Toutes</option>
             <option value="tagged">Annotées</option>
             <option value="untagged">Non annotées</option>
           </select>
-          <select className="border rounded-md px-3 py-2 text-sm" value={order} onChange={(e) => setOrder(e.target.value as "asc" | "desc")} disabled={loading || downloading} aria-label="Ordre de tri">
-            <option value="desc">Récentes d’abord</option>
-            <option value="asc">Anciennes d’abord</option>
+          <select className="border rounded-md px-3 py-2 text-sm" value={order} onChange={(e) => setOrder(e.target.value as "asc" | "desc")} disabled={loading || downloading}>
+            <option value="desc">Récentes d'abord</option>
+            <option value="asc">Anciennes d'abord</option>
           </select>
-          <select className="border rounded-md px-3 py-2 text-sm" value={String(limit)} onChange={(e) => setLimit(Number(e.target.value))} disabled={loading || downloading} aria-label="Taille de page">
+          <select className="border rounded-md px-3 py-2 text-sm" value={String(limit)} onChange={(e) => setLimit(Number(e.target.value))} disabled={loading || downloading}>
             <option value="12">12 / page</option>
             <option value="24">24 / page</option>
             <option value="48">48 / page</option>
             <option value="96">96 / page</option>
           </select>
           <Button variant="secondary" onClick={exportCsv} disabled={downloading || loading}>Exporter CSV</Button>
-          <Button variant="secondary" onClick={exportTaggedZip} disabled={downloading || loading}>Exporter ZIP des annotations</Button>
+          <Button variant="secondary" onClick={exportTaggedZip} disabled={downloading || loading}>Exporter ZIP</Button>
         </div>
       </div>
 
@@ -214,16 +241,29 @@ export default function Page() {
         onPrev={() => setPage((p) => Math.max(1, p - 1))}
         onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
         onJump={(p) => setPage(p)}
+        onSelectAll={handleSelectAll}
+        allSelected={allCurrentSelected}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {current.map((it: ResultItem, idx: number) => {
           const imgSrc = it.tagged_filename ? taggedImageUrl(it.tagged_filename as string) : "";
           const globalIndex = (page - 1) * limit + idx;
+          const isSelected = selectedIds.has(Number(it.id));
+
           return (
-            <div key={it.id} className="rounded-xl border p-4 space-y-3 hover:shadow-lg transition-shadow">
+            <div key={it.id} className={`rounded-xl border p-4 space-y-3 hover:shadow-lg transition-all ${isSelected ? "ring-2 ring-primary" : ""}`}>
               <div className="flex items-center justify-between">
-                <div className="text-sm font-medium truncate" title={it.filename}>{it.filename}</div>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelection(Number(it.id))}
+                    className="w-4 h-4 rounded border-gray-300"
+                    disabled={loading || downloading}
+                  />
+                  <div className="text-sm font-medium truncate" title={it.filename}>{it.filename}</div>
+                </div>
                 <div className="text-xs text-muted-foreground">{(it.confidence ?? 0) > 0 ? `${((it.confidence ?? 0) * 100).toFixed(1)}%` : "-"}</div>
               </div>
 
@@ -231,10 +271,9 @@ export default function Page() {
                 onClick={() => imgSrc && openAt(globalIndex)}
                 className="relative w-full aspect-[4/3] rounded bg-muted overflow-hidden group disabled:opacity-50"
                 disabled={!imgSrc}
-                aria-label={`Voir ${it.filename}`}
               >
                 {imgSrc ? (
-                  <Image src={imgSrc} alt={it.filename} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-contain transition-transform group-hover:scale-[1.02]" unoptimized   />
+                  <Image src={imgSrc} alt={it.filename} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-contain transition-transform group-hover:scale-[1.02]" unoptimized />
                 ) : (
                   <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Non annotée</div>
                 )}
@@ -245,19 +284,16 @@ export default function Page() {
                   <span className="font-semibold">{it.label || "-"}</span>
                   {it.birads ? <span className="text-muted-foreground"> • BI-RADS {it.birads}</span> : null}
                 </div>
-                <span className={it.tagged_filename ? "px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : "px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"}>
-                  {it.tagged_filename ? "Annotée" : "À annoter"}
-                </span>
               </div>
 
               <div className="flex items-center gap-3">
                 {imgSrc ? (
                   <Button asChild variant="link">
-                    <Link href={imgSrc} download>Télécharger l’annotation</Link>
+                    <Link href={imgSrc} download>Télécharger</Link>
                   </Button>
                 ) : (
                   <Button asChild variant="link">
-                    <Link href={downloadFileUrl("dicom", it.filename)}>Télécharger le DICOM</Link>
+                    <Link href={downloadFileUrl("dicom", it.filename)}>Télécharger DICOM</Link>
                   </Button>
                 )}
               </div>
@@ -276,6 +312,8 @@ export default function Page() {
         onPrev={() => setPage((p) => Math.max(1, p - 1))}
         onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
         onJump={(p) => setPage(p)}
+        onSelectAll={handleSelectAll}
+        allSelected={allCurrentSelected}
       />
 
       {selectedIndex !== null && sorted[selectedIndex] && (
@@ -293,10 +331,11 @@ export default function Page() {
 }
 
 function PaginationBar({
-  page, totalPages, from, to, total, disabled, onPrev, onNext, onJump,
+  page, totalPages, from, to, total, disabled, onPrev, onNext, onJump, onSelectAll, allSelected,
 }: {
   page: number; totalPages: number; from: number; to: number; total: number;
   disabled?: boolean; onPrev: () => void; onNext: () => void; onJump: (p: number) => void;
+  onSelectAll?: () => void; allSelected?: boolean;
 }) {
   const windowSize = 5;
   const half = Math.floor(windowSize / 2);
@@ -308,8 +347,26 @@ function PaginationBar({
 
   return (
     <div className="flex items-center justify-between rounded-xl border p-3">
-      <div className="text-sm text-muted-foreground">
-        {total > 0 ? <>Affichage <span className="font-medium text-foreground">{from}</span>–<span className="font-medium text-foreground">{to}</span> sur <span className="font-medium text-foreground">{total}</span></> : "Aucun résultat"}
+      <div className="flex items-center gap-3">
+        {onSelectAll && (
+          <button
+            onClick={onSelectAll}
+            disabled={disabled}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={onSelectAll}
+              className="w-4 h-4 rounded border-gray-300"
+              disabled={disabled}
+            />
+            <span>Tout sélectionner</span>
+          </button>
+        )}
+        <div className="text-sm text-muted-foreground">
+          {total > 0 ? <>Affichage <span className="font-medium text-foreground">{from}</span>–<span className="font-medium text-foreground">{to}</span> sur <span className="font-medium text-foreground">{total}</span></> : "Aucun résultat"}
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <Button variant="secondary" onClick={onPrev} disabled={disabled || page <= 1}>Précédent</Button>

@@ -1,3 +1,4 @@
+// lib/api/resultsApi.ts
 import type { ResultsResponse } from "@/types/imageInference";
 import apiClient from "./apiClient";
 import type { FileItem } from "@/types/files";
@@ -34,6 +35,28 @@ export const listResults = async (params?: {
     items,
     total: items.length,
   };
+};
+
+export const deleteResultsBatch = async (
+  items: Array<{ id: number; tagged_filename: string | null }>
+): Promise<{ deleted: string[]; failed: any[]; total_deleted: number }> => {
+  const filenames = items
+    .map((item) => item.tagged_filename)
+    .filter((fn): fn is string => !!fn);
+
+  if (filenames.length === 0) {
+    throw new Error("Aucun fichier à supprimer");
+  }
+
+  const params = new URLSearchParams();
+  params.set("kind", "tagged");
+  filenames.forEach((fn) => params.append("filenames", fn));
+
+  const { data } = await apiClient.delete(
+    `/ingest/delete-batch?${params.toString()}`
+  );
+  
+  return data;
 };
 
 export const taggedImageUrl = (filename: string): string => {
