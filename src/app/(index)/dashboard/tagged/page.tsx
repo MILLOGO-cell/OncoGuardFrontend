@@ -92,7 +92,7 @@ function ImageModal({
           )}
           <div className="relative w-full max-w-6xl aspect-[4/3]">
             {imgSrc ? (
-              <Image src={imgSrc} alt={item.filename} fill sizes="100vw" className="object-contain" priority />
+              <Image src={imgSrc} alt={item.filename} fill sizes="100vw" className="object-contain" priority unoptimized />
             ) : (
               <div className="absolute inset-0 grid place-items-center"><p className="text-sm text-muted-foreground">Aucune image annotée disponible</p></div>
             )}
@@ -234,7 +234,7 @@ export default function Page() {
                 aria-label={`Voir ${it.filename}`}
               >
                 {imgSrc ? (
-                  <Image src={imgSrc} alt={it.filename} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-contain transition-transform group-hover:scale-[1.02]" />
+                  <Image src={imgSrc} alt={it.filename} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-contain transition-transform group-hover:scale-[1.02]" unoptimized   />
                 ) : (
                   <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Non annotée</div>
                 )}
